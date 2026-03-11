@@ -1,5 +1,6 @@
 import Testing
 import Foundation
+import AppKit
 @testable import Ghostty
 
 final class MockSSHConnectionCredentialStore: SSHConnectionCredentialStore {
@@ -19,6 +20,13 @@ final class MockSSHConnectionCredentialStore: SSHConnectionCredentialStore {
 }
 
 struct AITerminalManagerTests {
+    @Test @MainActor func sshConnectionsWindowsWithoutTabGroupsAreNotTreatedAsSameGroup() {
+        let lhs = NSWindow()
+        let rhs = NSWindow()
+
+        #expect(SSHConnectionsController.windowsAreInSameTabGroup(lhs, rhs) == false)
+    }
+
     @Test func decodesLegacyHostConfigurationIntoSavedHosts() throws {
         let data = Data(#"{"hosts":[{"id":"ssh:buildbox","name":"Buildbox","transport":"ssh","sshAlias":"buildbox","hostname":"10.0.0.5","user":"deploy","port":2222,"defaultDirectory":"/srv/app","source":"configuration_file"}],"workspaces":[],"supervisor":{"arguments":[],"autoStart":false,"environment":{}}}"#.utf8)
         let configuration = try JSONDecoder().decode(AITerminalManagerConfiguration.self, from: data)

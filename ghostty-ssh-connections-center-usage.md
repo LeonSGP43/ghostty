@@ -6,6 +6,12 @@
 - Command Palette: `Open: Connections`
 - 默认会作为当前 Ghostty 终端窗口中的一个原生 macOS tab 打开。
 - 如果当前没有任何 Ghostty 终端窗口，则会退回为单独窗口。
+- 如果当前终端窗口禁用了 tab，`Connections` 也会退回为单独窗口。
+
+## Expected behavior
+
+- 已经存在 Ghostty 终端窗口时，打开 `Connections` 后应直接在同一窗口的 tab 栏中出现 `Connections`。
+- 不应因为 `Connections` 窗口此前尚未加入任何 tab group，而被误判为“已经和当前终端在同一个 tab group”。
 
 ## Save a new SSH connection
 
