@@ -137,6 +137,8 @@ class AppDelegate: NSObject,
         updateController.viewModel
     }
 
+    @MainActor lazy var settingsController = SettingsController(appDelegate: self)
+
     /// The elapsed time since the process was started
     var timeSinceLaunch: TimeInterval {
         return ProcessInfo.processInfo.systemUptime - applicationLaunchTime
@@ -418,6 +420,26 @@ class AppDelegate: NSObject,
         UNUserNotificationCenter.current().removeAllDeliveredNotifications()
     }
 
+    @MainActor
+    func relaunchApplication() {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+        process.arguments = ["-n", Bundle.main.bundlePath]
+
+        do {
+            try process.run()
+            NSApp.terminate(nil)
+        } catch {
+            Self.logger.error("Failed to relaunch Ghostty: \(error.localizedDescription)")
+        }
+    }
+
+    @IBAction func showSettings(_ sender: Any?) {
+        Task { @MainActor in
+            settingsController.show()
+        }
+    }
+
     /// This is called when the application is already open and someone double-clicks the icon
     /// or clicks the dock icon.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
@@ -660,6 +682,7 @@ class AppDelegate: NSObject,
 
         // Dock menu
         reloadDockMenu()
+        AppLocalization.localize(menu: NSApp.mainMenu)
     }
 
     /// Syncs a single menu shortcut for the given action. The action string is the same
