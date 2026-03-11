@@ -16,6 +16,10 @@ final class SSHConnectionsController: NSWindowController, NSWindowDelegate {
         window.title = L10n.SSHConnections.windowTitle
         window.isReleasedWhenClosed = false
         window.minSize = NSSize(width: 1280, height: 760)
+        window.tabbingMode = .preferred
+        DispatchQueue.main.async {
+            window.tabbingMode = .automatic
+        }
         window.center()
         window.contentView = NSHostingView(
             rootView: SSHConnectionsView()
@@ -31,8 +35,22 @@ final class SSHConnectionsController: NSWindowController, NSWindowDelegate {
         fatalError("init(coder:) is not supported for SSHConnectionsController")
     }
 
-    func show() {
+    func show(tabbedInto parentWindow: NSWindow? = TerminalController.preferredParent?.window) {
         store.refresh()
+
+        if let window,
+           let parentWindow,
+           parentWindow !== window {
+            if parentWindow.isMiniaturized {
+                parentWindow.deminiaturize(nil)
+            }
+
+            let sameTabGroup = window.tabGroup === parentWindow.tabGroup
+            if !sameTabGroup && window.tabbingMode != .disallowed {
+                _ = parentWindow.addTabbedWindowSafely(window, ordered: .above)
+            }
+        }
+
         window?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
