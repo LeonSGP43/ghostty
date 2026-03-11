@@ -4,8 +4,17 @@
 
 将产品定义为一个**单一安装、单一入口**的 AI 终端运维系统：
 
-- `Ghostty` 作为终端宿主、窗口/标签/分屏 UI 与终端运行时。
-- `Shannon` 作为**内嵌本地中枢服务**，负责任务调度、主控对话、审批、事件流、策略和工作流编排。
+- `Ghostty` 作为终端宿主、窗口/标签/分屏 UI、tab/session 生命周期管理者与终端运行时。
+- `Shannon` 作为**内嵌本地主脑 runtime**，负责任务调度、主控对话、审批、事件流、策略和工作流编排。
+
+实现策略默认不是把 `shan` 的 TUI/CLI 前端嵌进 Ghostty，而是复用 `shan` 已有的 Shannon runtime 基础设施：
+
+- `agent loop`
+- 本地 daemon HTTP/SSE 接口
+- session persistence
+- permissions / audit / skills / MCP / tools
+
+Ghostty 继续掌握 tab/session/terminal-state 的真实状态与原生控制；Shannon 掌握 task/plan/policy/approval/memory 的真实状态。
 
 V1 目标不是做成完整分布式运维平台，而是先交付一个**高性能、可托管、可接管、可管理本地与 SSH 终端 tab 的 AI 终端管理器**，并为后续多机编排与深度 agent 集成留接口。
 
@@ -131,11 +140,51 @@ V1 目标不是做成完整分布式运维平台，而是先交付一个**高性
   - 测试运行阶段在当前环境会卡在启动的 `Ghostty.app` 进程，需本机交互式收尾
   - `AppLocalizationTests` 已覆盖扩展后的原始文本映射与动态文案
 
+### 新增实现状态（2026-03-12）
+
+- `Ghostty` 现在默认把 `Shannon` 当作**内嵌本地主脑 runtime**：
+  - 若未配置外部 `binaryPath`，会进入 embedded runtime 模式
+  - 仍保留外部 bridge/runtime 作为兼容路径
+- `AI Terminal Manager` 已新增 Shannon 运行时状态面板：
+  - runtime endpoint
+  - health
+  - version
+  - active agent
+  - uptime
+- `AI Terminal Manager` 已新增 Shannon 请求与审批 UI：
+  - prompt 输入
+  - 流式 response 区
+  - 待审批动作卡片
+  - 批准 / 拒绝入口
+- 已落地 `Ghostty Native Bridge` 的第一批原生动作：
+  - `create_local_tab`
+  - `create_remote_tab`
+  - `read_tab`
+  - `close_tab`
+  - 同时保留 `send_command` / `send_input` / `focus_session`
+- 当前动作闭环已改为：
+  - Shannon runtime 先规划动作
+  - 需要提权的动作先进入 Ghostty 审批
+  - Ghostty 原生执行动作
+  - 执行结果再回传给 embedded Shannon runtime
+- 当前已新增的新建 tab 入口：
+  - `New Tab Picker`
+  - 支持本地 shell、recent host、saved host、imported host
+  - 与现有 SSH Connections 数据源复用
+- 当前针对新增动作链已验证：
+  - `swiftlint` 通过
+  - `embeddedRuntimeRequestsReadTabWithoutApproval` 单测通过
+  - `embeddedRuntimeRequestsApprovalBeforeRemoteTabCreation` 单测通过
+  - `AITerminalManagerTests` 全量在当前机器上仍存在偶发 `xcodebuild` runner 卡住问题，因此以定向测试结果为准
+
 ### 当前限制
 
-- Shannon 仍是本地 supervisor scaffold，尚未接入完整 Shannon workflow / API bridge
+- Shannon 已不再只是 supervisor scaffold，但当前 embedded runtime 仍是**本地实现版 Shannon 主脑骨架**，还不是完整 production-grade Shannon workflow
+- `Ghostty Native Bridge + Shannon Runtime` 的真实接线已经启动，但仍只覆盖第一批动作和单 tab 为主的执行链
+- `shan` 仅作为参考实现，不再作为当前代码路径的必改依赖
 - 远程 tab 当前通过 shell 启动后发送 `ssh ...` 初始输入完成，不是深度 SSH transport
 - tab 输出读取目前以 Ghostty 已有文本缓存为主，尚未引入更细粒度事件流建模
+- `create_*_tab` 之后还没有把新 tab 自动纳入更完整的 Shannon 后续任务链
 - 环境若缺少完整 macOS/Xcode 测试条件，则运行时验证需要你本机手动启动 app 检查
 
 ## Key Changes
@@ -143,9 +192,9 @@ V1 目标不是做成完整分布式运维平台，而是先交付一个**高性
 ### 1. 产品架构与进程模型
 
 - 采用**单产品、分层实现**：
-  - `Ghostty App`：终端 UI、tab/pane 生命周期、主控页、托管入口、终端读取器。
-  - `Embedded Shannon Supervisor`：本地服务进程，随 Ghostty 启动并受其管理。
-  - `Ghostty-Shannon Bridge`：将 Ghostty 的 tab/session/host/runtime 事件映射到 Shannon 的 task/session/event 模型。
+  - `Ghostty App`：终端 UI、tab/pane 生命周期、主控页、托管入口、终端读取器、动作执行者。
+  - `Ghostty Native Bridge`：将 Ghostty 的 tab/session/host/runtime 事件映射到 Shannon 的 task/session/event 模型，并负责执行 Shannon 下发的动作。
+  - `Embedded Shannon Runtime`：本地主脑服务进程，基于 `shan` 的 runtime 能力构建，随 Ghostty 启动并受其管理。
 - 对用户保持**一体安装与一体启动**：
   - 启动 Ghostty 时自动确保 Shannon 本地服务可用。
   - 用户不需要单独安装或手动运行 Shannon。
@@ -153,6 +202,10 @@ V1 目标不是做成完整分布式运维平台，而是先交付一个**高性
   - Ghostty 崩溃不应带崩 Shannon。
   - Shannon 卡住不应阻塞终端渲染或输入。
 - 本地通信默认使用**本机 loopback HTTP/WebSocket 或 Unix domain socket**，由桥接层统一封装，Ghostty UI 不直接散落调用 Shannon API。
+- 第一阶段默认采用**混合内嵌模式**：
+  - Ghostty 启动并管理独立本地 Shannon runtime 进程
+  - 复用 `shan` 的 agent/daemon/session/tools 基础设施
+  - 不把 `shan` 的 TUI/CLI 命令层直接嵌进 Ghostty
 
 ### 2. 终端资源模型
 
@@ -269,10 +322,21 @@ V1 目标不是做成完整分布式运维平台，而是先交付一个**高性
   - human approval
   - policy 执行
   - 历史与观测
+- `shan` 项目提供可直接复用的 Shannon runtime 基础设施：
+  - `agent loop`
+  - streaming / tool-call / approval hook
+  - 本地 daemon HTTP API
+  - session persistence
+  - agent config / memory / skills
+  - permissions / audit
+  - MCP / gateway integration
 - 新增 Ghostty 专用桥接层，而非把 Ghostty 直接当成一个普通 Shannon client：
   - Ghostty tab/session/host 要映射为 Shannon 的 domain objects
   - 主控页的对话提交要带上目标 tab/workspace 选择
   - Shannon 输出的动作计划要转换成 Ghostty 可执行动作
+- 复用边界必须明确：
+  - 直接复用：`shan/internal/agent`、`shan/internal/daemon`、`shan/internal/session`、`shan/internal/permissions`、`shan/internal/audit`、与 Ghostty 无关的通用 tools
+  - 仅作参考：`shan/internal/tools/ghostty*.go`、`shan ghostty workspace`、`shan` TUI / CLI 命令层
 - 新增 Ghostty 专用工具/动作类型：
   - `create_local_tab`
   - `create_remote_tab`
@@ -283,18 +347,20 @@ V1 目标不是做成完整分布式运维平台，而是先交付一个**高性
   - `request_user_approval`
   - `handoff_to_user`
   - `resume_managed_tab`
+- 正式产品链路中，Shannon 不直接通过 AppleScript 或外部 UI automation 操作 Ghostty 内部 tab；正式控制路径统一走 `Ghostty Native Bridge`。
 - 默认不修改 Shannon 的通用任务抽象语义，只新增 Ghostty adapter 和少量扩展字段。
 
 ### 8. 调度器与任务队列
 
 - V1 调度器核心目标：**持续推进 tab 相关任务直到完成或等待人工**。
 - 调度循环需要支持：
-  - 从 Shannon 取待执行动作
+  - 从 Shannon runtime 的 agent loop 接收流式动作请求、审批请求和任务推进结果
   - 从 Ghostty 获取目标 tab 最新状态
   - 判断是否可继续执行
   - 写入终端输入或创建/聚焦 tab
   - 发现等待确认条件时挂起
   - 发现完成条件时进入验收
+- Ghostty bridge 负责执行动作并把执行结果回灌给 Shannon runtime。
 - 队列最小字段：
   - task id
   - target tab ids
@@ -303,11 +369,13 @@ V1 目标不是做成完整分布式运维平台，而是先交付一个**高性
   - last observation
   - next action
   - approval status
+- Ghostty 当前的 task queue/state UI 可以保留，但后续应切换为由 Shannon runtime 驱动的数据源，而不是本地假状态容器。
 - V1 不追求复杂分布式公平调度；先实现**单用户桌面内的稳定托管队列**。
 
 ### 9. Shell / SSH 执行动作
 
 - V1 主控最重要的接管对象是**通用 shell + SSH**，不是先围绕 Codex/Claude Code 做特化。
+- 同时，Ghostty 内每一个 tab 都必须是 Shannon 可观测、可控制、可接管的一等对象；Shannon 不是偶尔帮忙开 tab 的工具，而是 Ghostty 的全局 AI 主控。
 - 但设计上需兼容未来 AI TUI：
   - 允许定义“工具型终端 profile”
   - 为 Claude Code / Codex 预留 prompt-detection 与状态识别插件接口
@@ -315,12 +383,14 @@ V1 目标不是做成完整分布式运维平台，而是先交付一个**高性
   - 主控可发送命令、确认输入、导航目录
   - 可检测典型 prompt 与命令完成
   - 对明显卡住、无输出、等待输入做状态标记
+- `shan` 当前已有的 Ghostty 控制代码仅证明 Shannon 侧已有 Ghostty domain 经验，但正式产品实现必须切换到 Ghostty 原生控制链路。
 - 不在 V1 承诺对所有 TUI 稳定自动操作；V1 只需保证 shell 与 SSH 会话可靠。
 
 ### 10. 配置、规则与权限
 
 - 新增一组 Ghostty AI 配置：
   - Shannon 服务启用与连接方式
+  - Shannon runtime binary path / local port or socket / endpoint / API key 引用方式 / config root
   - Host 列表与目录模板
   - 默认托管策略
   - 审批规则
@@ -365,9 +435,14 @@ V1 目标不是做成完整分布式运维平台，而是先交付一个**高性
   - `ManagedTerminalSession`
   - `ManagedState`
   - `ControlTaskBinding`
+- Ghostty 内部新增本地 bridge client 能力：
+  - runtime 启动/停止/健康检查
+  - task 提交与流式订阅
+  - approval 提交
+  - task 状态查询
 - Ghostty ↔ Shannon 桥接接口新增动作/事件协议：
-  - tab 创建、聚焦、读取、写入、暂停、恢复
-  - tab 输出更新、等待输入、命令完成、异常、断开
+  - Shannon -> Ghostty：tab 创建、聚焦、读取、写入、暂停、恢复、关闭
+  - Ghostty -> Shannon：tab 输出更新、等待输入、命令完成、异常、断开、approval.response
 - Shannon 扩展字段：
   - task 与 session 可附带 `ghostty_tab_ids`
   - 可附带 `host_id`、`workspace_id`、`terminal_mode`
@@ -384,6 +459,7 @@ V1 目标不是做成完整分布式运维平台，而是先交付一个**高性
   - tab 创建后稳定映射到 Shannon session/task
   - tab 关闭、断连、重连时状态正确更新
   - Ghostty 事件能稳定进入 Shannon 流
+  - Ghostty 打开后可自动拉起 Shannon runtime，并在主控页显示健康状态
 - **读取器**
   - 普通 shell 输出能被提取
   - 长输出与滚动缓冲可读
@@ -397,19 +473,24 @@ V1 目标不是做成完整分布式运维平台，而是先交付一个**高性
   - 高风险命令进入审批
   - 批准后继续执行
   - 拒绝后任务挂起并保留上下文
+  - 用户在主控页批准/拒绝后，Shannon task 状态和 Ghostty 托管状态保持一致
 - **远程会话**
   - SSH 成功建立并进入默认/指定目录
   - 远程断开后状态正确标记
   - 主控不会把远程断线误判为成功
 - **性能与回归**
+  - 用户可把任意现有 tab 纳入托管，并被正确映射到 Shannon task/session
+  - Shannon 能基于 tab 当前缓冲区内容决定下一步动作
+  - 某个 tab 被用户手动接管后，Shannon 停止写入但继续观察
   - 未托管 tab 的输入延迟和渲染性能无明显退化
   - 大量 tab 观察时 UI 不冻结
   - Shannon 服务异常时 Ghostty 仍能作为普通终端使用
+  - 不启用 Shannon 时，Ghostty 普通终端行为无回归
 
 ## Delivery Plan
 
 - **Phase 1 — 一体化底座**
-  - 内嵌 Shannon 启动/健康检查
+  - 基于 `shan` runtime 的本地 Shannon 服务启动/健康检查
   - Ghostty-Shannon bridge 基础通信
   - Host/Workspace 配置模型
   - 新建 local/remote tab 入口
@@ -432,7 +513,11 @@ V1 目标不是做成完整分布式运维平台，而是先交付一个**高性
 ## Assumptions
 
 - 产品作为**一个一体化 Ghostty 发行版**发布，而不是两个独立产品拼装。
+- `shan` 作为 Shannon runtime 的代码基础被复用，但其 TUI/CLI 前端不进入 Ghostty 产品面。
 - Shannon 以**本地内嵌服务**方式集成，默认由 Ghostty 自动管理生命周期。
+- Ghostty 是 tab/session/terminal-state 的事实来源。
+- Shannon 是 task/plan/policy/approval/memory 的事实来源。
+- 正式产品链路不依赖 `shan` 当前基于 AppleScript 的 Ghostty 控制实现。
 - V1 远程连接仅依赖 SSH，不要求在远端安装 agent。
 - V1 优先支持**通用 shell/SSH 托管**；Claude Code / Codex 的深度 TUI 接管放在后续适配层。
 - 主控默认拥有较高权限，但高风险动作必须通过策略/审批链路控制。
