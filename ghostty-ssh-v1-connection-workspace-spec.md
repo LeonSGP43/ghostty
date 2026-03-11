@@ -107,6 +107,7 @@ SSH 工作台 UI 先保留在当前 AI Terminal Manager 内，但主机区域改
 - Recent
 - Saved Hosts
 - Imported SSH Config Hosts
+- Host Details
 - Host Editor
 
 `Host Actions` 包含：
@@ -121,12 +122,14 @@ SSH 工作台 UI 先保留在当前 AI Terminal Manager 内，但主机区域改
 
 - `Connect`
 - `Edit`
+- `Duplicate`
 - `Remove`
 
 #### Imported Host
 
 - `Connect`
 - `Edit`
+- `Duplicate`
 - `Reset Override`（仅当存在本地覆盖时出现）
 
 编辑 Imported Host 后：

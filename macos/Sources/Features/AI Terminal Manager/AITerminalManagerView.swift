@@ -9,6 +9,7 @@ struct AITerminalManagerView: View {
     @State private var hostPort = ""
     @State private var hostDefaultDirectory = ""
     @State private var editingHostID: String?
+    @State private var selectedHostID: String?
     @State private var hostSearchText = ""
     @State private var workspaceName = ""
     @State private var workspaceDirectory = ""
@@ -164,6 +165,9 @@ struct AITerminalManagerView: View {
                     hostGroup(title: L10n.AITerminalManager.savedHosts, hosts: filteredSavedHosts)
                     hostGroup(title: L10n.AITerminalManager.importedHosts, hosts: filteredImportedHosts)
                 }
+
+                Divider()
+                hostDetailsSection
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -219,6 +223,64 @@ struct AITerminalManagerView: View {
                 .foregroundStyle(.secondary)
         }
         .padding(.vertical, 4)
+        .padding(.horizontal, 8)
+        .background(hostRowBackground(for: host), in: RoundedRectangle(cornerRadius: 8))
+        .contentShape(Rectangle())
+        .onTapGesture {
+            selectedHostID = host.id
+        }
+    }
+
+    private var hostDetailsSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(L10n.AITerminalManager.hostDetails)
+                .font(.headline)
+
+            if let selectedHost {
+                if let recentRecord = store.recentRecord(for: selectedHost) {
+                    Text(recentSummary(for: recentRecord))
+                        .font(.caption)
+                        .foregroundStyle(recentRecord.status == .failed ? .red : .secondary)
+                } else {
+                    Text(L10n.AITerminalManager.noRecentHostActivity)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                detailLine(label: L10n.AITerminalManager.hostSource, value: hostSourceLabel(for: selectedHost))
+                detailLine(label: L10n.AITerminalManager.hostTarget, value: selectedHost.connectionTarget ?? "—")
+                detailLine(label: L10n.AITerminalManager.hostname, value: selectedHost.hostname ?? "—")
+                detailLine(label: L10n.AITerminalManager.user, value: selectedHost.user ?? "—")
+                detailLine(label: L10n.AITerminalManager.port, value: selectedHost.port.map(String.init) ?? "—")
+                detailLine(label: L10n.AITerminalManager.defaultDirectory, value: selectedHost.defaultDirectory ?? "—")
+
+                HStack {
+                    Button(L10n.AITerminalManager.connect) {
+                        store.open(host: selectedHost)
+                    }
+                    Button(L10n.AITerminalManager.edit) {
+                        beginEditing(selectedHost)
+                    }
+                    Button(L10n.AITerminalManager.duplicateHost) {
+                        beginDuplicating(selectedHost)
+                    }
+                }
+            } else {
+                Text(L10n.AITerminalManager.noHostSelected)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private func detailLine(label: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.callout)
+                .textSelection(.enabled)
+        }
     }
 
     private var workspacesSection: some View {
@@ -293,6 +355,7 @@ struct AITerminalManagerView: View {
     }
 
     private func beginEditing(_ host: AITerminalHost) {
+        selectedHostID = host.id
         editingHostID = host.id
         hostName = host.name
         hostAlias = host.sshAlias ?? ""
@@ -310,6 +373,20 @@ struct AITerminalManagerView: View {
         hostUser = ""
         hostPort = ""
         hostDefaultDirectory = ""
+    }
+
+    private func beginDuplicating(_ host: AITerminalHost) {
+        selectedHostID = host.id
+        editingHostID = nil
+        hostName = "\(host.name) \(L10n.AITerminalManager.copySuffix)"
+        hostAlias = AITerminalManagerStore.duplicateAlias(
+            for: host,
+            existingHosts: store.availableHosts.filter { !$0.isLocal }
+        )
+        hostHostname = host.hostname ?? ""
+        hostUser = host.user ?? ""
+        hostPort = host.port.map(String.init) ?? ""
+        hostDefaultDirectory = host.defaultDirectory ?? ""
     }
 
     private var hostEditorTitle: String {
@@ -340,6 +417,14 @@ struct AITerminalManagerView: View {
         })
     }
 
+    private var selectedHost: AITerminalHost? {
+        if let selectedHostID,
+           let selectedHost = store.availableHosts.first(where: { $0.id == selectedHostID }) {
+            return selectedHost
+        }
+        return filteredRecentHosts.first ?? filteredSavedHosts.first ?? filteredImportedHosts.first
+    }
+
     private func filterHosts(_ hosts: [AITerminalHost]) -> [AITerminalHost] {
         let query = hostSearchText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !query.isEmpty else { return hosts }
@@ -361,6 +446,22 @@ struct AITerminalManagerView: View {
                 : L10n.AITerminalManager.importedHostSource
         }
         return ""
+    }
+
+    private func hostRowBackground(for host: AITerminalHost) -> Color {
+        selectedHost?.id == host.id ? .accentColor.opacity(0.12) : .clear
+    }
+
+    private func recentSummary(for record: AITerminalRecentHostRecord) -> String {
+        let status = switch record.status {
+        case .connected: L10n.AITerminalManager.hostStatusConnected
+        case .failed: L10n.AITerminalManager.hostStatusFailed
+        }
+        let timestamp = record.connectedAt.formatted(date: .abbreviated, time: .shortened)
+        if let errorSummary = record.errorSummary, !errorSummary.isEmpty {
+            return "\(status) • \(timestamp) • \(errorSummary)"
+        }
+        return "\(status) • \(timestamp)"
     }
 
     private var sessionsSection: some View {

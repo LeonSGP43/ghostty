@@ -48,6 +48,15 @@ enum AppLocalization {
         "ai.manager.hosts.default_directory": "Default Directory",
         "ai.manager.hosts.save": "Save Host",
         "ai.manager.hosts.update": "Update Host",
+        "ai.manager.hosts.details": "Host Details",
+        "ai.manager.hosts.none_selected": "Select a host to inspect and act on it.",
+        "ai.manager.hosts.no_recent_activity": "No recent connection activity.",
+        "ai.manager.hosts.source_label": "Source",
+        "ai.manager.hosts.target": "Target",
+        "ai.manager.hosts.duplicate": "Duplicate",
+        "ai.manager.hosts.copy_suffix": "Copy",
+        "ai.manager.hosts.status.connected": "Connected",
+        "ai.manager.hosts.status.failed": "Failed",
         "ai.manager.hosts.empty": "No hosts configured yet.",
         "ai.manager.hosts.search": "Search SSH Hosts",
         "ai.manager.hosts.recent": "Recent",
@@ -209,6 +218,15 @@ enum AppLocalization {
         "ai.manager.hosts.default_directory": "默认目录",
         "ai.manager.hosts.save": "保存主机",
         "ai.manager.hosts.update": "更新主机",
+        "ai.manager.hosts.details": "主机详情",
+        "ai.manager.hosts.none_selected": "选择一个主机以查看详情并执行操作。",
+        "ai.manager.hosts.no_recent_activity": "暂无最近连接记录。",
+        "ai.manager.hosts.source_label": "来源",
+        "ai.manager.hosts.target": "目标",
+        "ai.manager.hosts.duplicate": "复制",
+        "ai.manager.hosts.copy_suffix": "副本",
+        "ai.manager.hosts.status.connected": "已连接",
+        "ai.manager.hosts.status.failed": "连接失败",
         "ai.manager.hosts.empty": "还没有配置任何主机。",
         "ai.manager.hosts.search": "搜索 SSH 主机",
         "ai.manager.hosts.recent": "最近连接",
@@ -912,6 +930,15 @@ enum L10n {
         nonisolated static var defaultDirectory: String { AppLocalization.localizedString("ai.manager.hosts.default_directory") }
         nonisolated static var saveHost: String { AppLocalization.localizedString("ai.manager.hosts.save") }
         nonisolated static var updateHost: String { AppLocalization.localizedString("ai.manager.hosts.update") }
+        nonisolated static var hostDetails: String { AppLocalization.localizedString("ai.manager.hosts.details") }
+        nonisolated static var noHostSelected: String { AppLocalization.localizedString("ai.manager.hosts.none_selected") }
+        nonisolated static var noRecentHostActivity: String { AppLocalization.localizedString("ai.manager.hosts.no_recent_activity") }
+        nonisolated static var hostSource: String { AppLocalization.localizedString("ai.manager.hosts.source_label") }
+        nonisolated static var hostTarget: String { AppLocalization.localizedString("ai.manager.hosts.target") }
+        nonisolated static var duplicateHost: String { AppLocalization.localizedString("ai.manager.hosts.duplicate") }
+        nonisolated static var copySuffix: String { AppLocalization.localizedString("ai.manager.hosts.copy_suffix") }
+        nonisolated static var hostStatusConnected: String { AppLocalization.localizedString("ai.manager.hosts.status.connected") }
+        nonisolated static var hostStatusFailed: String { AppLocalization.localizedString("ai.manager.hosts.status.failed") }
         nonisolated static var hostsEmpty: String { AppLocalization.localizedString("ai.manager.hosts.empty") }
         nonisolated static var searchHosts: String { AppLocalization.localizedString("ai.manager.hosts.search") }
         nonisolated static var recentHosts: String { AppLocalization.localizedString("ai.manager.hosts.recent") }
