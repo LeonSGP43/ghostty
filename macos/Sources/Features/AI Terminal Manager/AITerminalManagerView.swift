@@ -9,6 +9,7 @@ struct AITerminalManagerView: View {
     @State private var hostPort = ""
     @State private var hostDefaultDirectory = ""
     @State private var editingHostID: String?
+    @State private var hostSearchText = ""
     @State private var workspaceName = ""
     @State private var workspaceDirectory = ""
     @State private var selectedWorkspaceHostID = AITerminalHost.local.id
@@ -101,6 +102,9 @@ struct AITerminalManagerView: View {
 
                 Divider()
 
+                TextField(L10n.AITerminalManager.searchHosts, text: $hostSearchText)
+                    .textFieldStyle(.roundedBorder)
+
                 VStack(alignment: .leading, spacing: 8) {
                     Text(L10n.AITerminalManager.addSSHHost)
                         .font(.headline)
@@ -135,41 +139,69 @@ struct AITerminalManagerView: View {
                 }
                 .textFieldStyle(.roundedBorder)
 
-                if store.availableHosts.isEmpty {
+                if filteredRecentHosts.isEmpty && filteredSavedHosts.isEmpty && filteredImportedHosts.isEmpty {
                     Text(L10n.AITerminalManager.hostsEmpty)
                         .foregroundStyle(.secondary)
                 } else {
-                    ForEach(store.availableHosts.filter { !$0.isLocal }) { host in
-                        VStack(alignment: .leading, spacing: 6) {
-                            HStack {
-                                Text(host.name)
-                                    .font(.headline)
-                                Spacer()
-                                Button(L10n.AITerminalManager.connect) {
-                                    store.open(host: host)
-                                }
-                                Button(L10n.AITerminalManager.edit) {
-                                    beginEditing(host)
-                                }
-                                if store.isUserManagedHost(host) {
-                                    Button(L10n.AITerminalManager.remove) {
-                                        store.removeHost(host)
-                                        if editingHostID == host.id {
-                                            resetHostEditor()
-                                        }
-                                    }
-                                }
-                            }
-                            Text(host.displaySubtitle)
-                                .font(.callout)
-                                .foregroundStyle(.secondary)
-                        }
-                        .padding(.vertical, 4)
-                    }
+                    hostGroup(title: L10n.AITerminalManager.recentHosts, hosts: filteredRecentHosts)
+                    hostGroup(title: L10n.AITerminalManager.savedHosts, hosts: filteredSavedHosts)
+                    hostGroup(title: L10n.AITerminalManager.importedHosts, hosts: filteredImportedHosts)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+    }
+
+    @ViewBuilder
+    private func hostGroup(title: String, hosts: [AITerminalHost]) -> some View {
+        if !hosts.isEmpty {
+            Divider()
+            Text(title)
+                .font(.headline)
+            ForEach(hosts) { host in
+                hostRow(host)
+            }
+        }
+    }
+
+    private func hostRow(_ host: AITerminalHost) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(host.name)
+                        .font(.headline)
+                    Text(hostSourceLabel(for: host))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button(L10n.AITerminalManager.connect) {
+                    store.open(host: host)
+                }
+                Button(L10n.AITerminalManager.edit) {
+                    beginEditing(host)
+                }
+                if store.isUserManagedHost(host) {
+                    Button(L10n.AITerminalManager.remove) {
+                        store.removeHost(host)
+                        if editingHostID == host.id {
+                            resetHostEditor()
+                        }
+                    }
+                } else if store.isImportedHostOverridden(host) {
+                    Button(L10n.AITerminalManager.resetOverride) {
+                        store.resetImportedHostOverride(host)
+                        if editingHostID == host.id {
+                            resetHostEditor()
+                        }
+                    }
+                }
+            }
+            Text(host.displaySubtitle)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+        }
+        .padding(.vertical, 4)
     }
 
     private var workspacesSection: some View {
@@ -261,6 +293,43 @@ struct AITerminalManagerView: View {
         hostUser = ""
         hostPort = ""
         hostDefaultDirectory = ""
+    }
+
+    private var filteredRecentHosts: [AITerminalHost] {
+        filterHosts(store.recentHosts)
+    }
+
+    private var filteredSavedHosts: [AITerminalHost] {
+        filterHosts(store.savedHosts)
+    }
+
+    private var filteredImportedHosts: [AITerminalHost] {
+        filterHosts(store.mergedImportedHosts.filter { imported in
+            !store.savedHosts.contains(where: { $0.id == imported.id })
+        })
+    }
+
+    private func filterHosts(_ hosts: [AITerminalHost]) -> [AITerminalHost] {
+        let query = hostSearchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return hosts }
+        return hosts.filter { host in
+            host.name.localizedCaseInsensitiveContains(query)
+                || (host.sshAlias?.localizedCaseInsensitiveContains(query) ?? false)
+                || (host.hostname?.localizedCaseInsensitiveContains(query) ?? false)
+                || (host.user?.localizedCaseInsensitiveContains(query) ?? false)
+        }
+    }
+
+    private func hostSourceLabel(for host: AITerminalHost) -> String {
+        if store.savedHosts.contains(where: { $0.id == host.id }) {
+            return L10n.AITerminalManager.savedHostSource
+        }
+        if store.isImportedHost(host) {
+            return store.isImportedHostOverridden(host)
+                ? L10n.AITerminalManager.importedHostOverriddenSource
+                : L10n.AITerminalManager.importedHostSource
+        }
+        return ""
     }
 
     private var sessionsSection: some View {

@@ -45,10 +45,18 @@ enum AppLocalization {
         "ai.manager.hosts.default_directory": "Default Directory",
         "ai.manager.hosts.save": "Save Host",
         "ai.manager.hosts.empty": "No hosts configured yet.",
+        "ai.manager.hosts.search": "Search SSH Hosts",
+        "ai.manager.hosts.recent": "Recent",
+        "ai.manager.hosts.saved": "Saved Hosts",
+        "ai.manager.hosts.imported": "Imported from SSH Config",
+        "ai.manager.hosts.source.saved": "Saved",
+        "ai.manager.hosts.source.imported": "Imported",
+        "ai.manager.hosts.source.imported_overridden": "Imported · Local Override",
         "ai.manager.hosts.connect": "Connect",
         "ai.manager.edit": "Edit",
         "ai.manager.cancel_edit": "Cancel",
         "ai.manager.remove": "Remove",
+        "ai.manager.hosts.reset_override": "Reset Override",
         "ai.manager.workspaces": "Workspaces",
         "ai.manager.workspaces.add_local": "Add Local Workspace",
         "ai.manager.workspaces.register": "Register Workspace",
@@ -194,10 +202,18 @@ enum AppLocalization {
         "ai.manager.hosts.default_directory": "默认目录",
         "ai.manager.hosts.save": "保存主机",
         "ai.manager.hosts.empty": "还没有配置任何主机。",
+        "ai.manager.hosts.search": "搜索 SSH 主机",
+        "ai.manager.hosts.recent": "最近连接",
+        "ai.manager.hosts.saved": "已保存连接",
+        "ai.manager.hosts.imported": "从 SSH 配置导入",
+        "ai.manager.hosts.source.saved": "已保存",
+        "ai.manager.hosts.source.imported": "已导入",
+        "ai.manager.hosts.source.imported_overridden": "已导入 · 本地覆盖",
         "ai.manager.hosts.connect": "连接",
         "ai.manager.edit": "编辑",
         "ai.manager.cancel_edit": "取消编辑",
         "ai.manager.remove": "移除",
+        "ai.manager.hosts.reset_override": "重置覆盖",
         "ai.manager.workspaces": "工作区",
         "ai.manager.workspaces.add_local": "添加本地工作区",
         "ai.manager.workspaces.register": "注册工作区",
@@ -885,10 +901,18 @@ enum L10n {
         nonisolated static var defaultDirectory: String { AppLocalization.localizedString("ai.manager.hosts.default_directory") }
         nonisolated static var saveHost: String { AppLocalization.localizedString("ai.manager.hosts.save") }
         nonisolated static var hostsEmpty: String { AppLocalization.localizedString("ai.manager.hosts.empty") }
+        nonisolated static var searchHosts: String { AppLocalization.localizedString("ai.manager.hosts.search") }
+        nonisolated static var recentHosts: String { AppLocalization.localizedString("ai.manager.hosts.recent") }
+        nonisolated static var savedHosts: String { AppLocalization.localizedString("ai.manager.hosts.saved") }
+        nonisolated static var importedHosts: String { AppLocalization.localizedString("ai.manager.hosts.imported") }
+        nonisolated static var savedHostSource: String { AppLocalization.localizedString("ai.manager.hosts.source.saved") }
+        nonisolated static var importedHostSource: String { AppLocalization.localizedString("ai.manager.hosts.source.imported") }
+        nonisolated static var importedHostOverriddenSource: String { AppLocalization.localizedString("ai.manager.hosts.source.imported_overridden") }
         nonisolated static var connect: String { AppLocalization.localizedString("ai.manager.hosts.connect") }
         nonisolated static var edit: String { AppLocalization.localizedString("ai.manager.edit") }
         nonisolated static var cancelEdit: String { AppLocalization.localizedString("ai.manager.cancel_edit") }
         nonisolated static var remove: String { AppLocalization.localizedString("ai.manager.remove") }
+        nonisolated static var resetOverride: String { AppLocalization.localizedString("ai.manager.hosts.reset_override") }
         nonisolated static var workspaces: String { AppLocalization.localizedString("ai.manager.workspaces") }
         nonisolated static var addLocalWorkspace: String { AppLocalization.localizedString("ai.manager.workspaces.add_local") }
         nonisolated static var registerWorkspace: String { AppLocalization.localizedString("ai.manager.workspaces.register") }
