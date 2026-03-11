@@ -151,6 +151,48 @@ struct AITerminalManagerTests {
         #expect(store.configuration.savedHosts.first?.authMode == .system)
     }
 
+    @Test func derivesHostNameFromAliasOrHostname() {
+        #expect(
+            AITerminalManagerStore.resolvedHostName(
+                explicitName: "",
+                sshAlias: "buildbox",
+                hostname: "10.0.0.5",
+                user: "deploy"
+            ) == "buildbox"
+        )
+        #expect(
+            AITerminalManagerStore.resolvedHostName(
+                explicitName: "",
+                sshAlias: "",
+                hostname: "10.0.0.5",
+                user: "deploy"
+            ) == "deploy@10.0.0.5"
+        )
+    }
+
+    @Test @MainActor func storeSavesHostWithoutExplicitName() {
+        let tempURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathExtension("json")
+
+        let store = AITerminalManagerStore(
+            appDelegateProvider: { nil },
+            configurationURL: tempURL
+        )
+
+        store.saveHost(
+            name: "",
+            sshAlias: "buildbox",
+            hostname: "",
+            user: "deploy",
+            port: "2222",
+            defaultDirectory: "/srv/app"
+        )
+
+        #expect(store.lastError == nil)
+        #expect(store.configuration.savedHosts.first?.name == "buildbox")
+    }
+
     @Test @MainActor func storeUpdatesExistingHostByStableID() throws {
         let tempURL = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString)
