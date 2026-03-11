@@ -282,6 +282,36 @@ struct AITerminalManagerTests {
         #expect(reconciled.recentHosts.map(\.id) == ["ssh:keep", "ssh:saved"])
     }
 
+    @Test func duplicateAliasAvoidsCollisions() {
+        let host = AITerminalHost(
+            id: "configured:deploy@10.0.0.5",
+            name: "Buildbox Prod",
+            transport: .ssh,
+            sshAlias: nil,
+            hostname: "10.0.0.5",
+            user: "deploy",
+            port: 22,
+            defaultDirectory: nil,
+            source: .configurationFile
+        )
+        let existingHosts = [
+            AITerminalHost(
+                id: "ssh:10-0-0-5-copy",
+                name: "Buildbox Prod Copy",
+                transport: .ssh,
+                sshAlias: "10-0-0-5-copy",
+                hostname: "10.0.0.5",
+                user: "deploy",
+                port: 22,
+                defaultDirectory: nil,
+                source: .configurationFile
+            ),
+        ]
+
+        let alias = AITerminalManagerStore.duplicateAlias(for: host, existingHosts: existingHosts)
+        #expect(alias == "10-0-0-5-copy-2")
+    }
+
     @Test @MainActor func reloadImportedSSHHostsUsesInjectedLoader() {
         let tempURL = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString)
@@ -311,6 +341,42 @@ struct AITerminalManagerTests {
 
         #expect(store.importedSSHHosts.map(\.id) == ["ssh:buildbox"])
         #expect(store.mergedImportedHosts.map(\.id) == ["ssh:buildbox"])
+    }
+
+    @Test @MainActor func recentRecordReturnsLatestStatusForHost() throws {
+        let tempURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathExtension("json")
+
+        let host = AITerminalHost(
+            id: "ssh:buildbox",
+            name: "Buildbox",
+            transport: .ssh,
+            sshAlias: "buildbox",
+            hostname: "10.0.0.5",
+            user: "deploy",
+            port: 22,
+            defaultDirectory: nil,
+            source: .configurationFile
+        )
+        let configuration = AITerminalManagerConfiguration(
+            savedHosts: [host],
+            recentHosts: [
+                .init(id: host.id, connectedAt: Date(timeIntervalSince1970: 1), status: .connected),
+                .init(id: host.id, connectedAt: Date(timeIntervalSince1970: 2), status: .failed, errorSummary: "Permission denied"),
+            ]
+        )
+        let data = try JSONEncoder().encode(configuration)
+        try data.write(to: tempURL, options: .atomic)
+
+        let store = AITerminalManagerStore(
+            appDelegateProvider: { nil },
+            configurationURL: tempURL
+        )
+
+        let record = store.recentRecord(for: host)
+        #expect(record?.status == .failed)
+        #expect(record?.errorSummary == "Permission denied")
     }
 
     @Test @MainActor func sendCommandRequiresSessionSelection() {

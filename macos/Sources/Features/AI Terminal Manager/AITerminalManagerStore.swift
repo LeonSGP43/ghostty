@@ -96,6 +96,13 @@ final class AITerminalManagerStore: ObservableObject {
             .compactMap { lookup[$0.id] }
     }
 
+    func recentRecord(for host: AITerminalHost) -> AITerminalRecentHostRecord? {
+        configuration.recentHosts
+            .filter { $0.id == host.id }
+            .sorted { $0.connectedAt > $1.connectedAt }
+            .first
+    }
+
     var workspaces: [AITerminalWorkspaceTemplate] {
         configuration.workspaces.sorted {
             $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
@@ -765,6 +772,33 @@ final class AITerminalManagerStore: ObservableObject {
             at: 0
         )
         return Array(next.prefix(8))
+    }
+
+    nonisolated static func duplicateAlias(
+        for host: AITerminalHost,
+        existingHosts: [AITerminalHost]
+    ) -> String {
+        let seed = (host.sshAlias?.isEmpty == false ? host.sshAlias : nil)
+            ?? (host.hostname?.isEmpty == false ? host.hostname : nil)
+            ?? host.name
+        let normalizedSeed = seed
+            .lowercased()
+            .replacingOccurrences(
+                of: #"[^a-z0-9]+"#,
+                with: "-",
+                options: .regularExpression
+            )
+            .trimmingCharacters(in: CharacterSet(charactersIn: "-"))
+        let base = normalizedSeed.isEmpty ? "host" : normalizedSeed
+
+        let existingAliases = Set(existingHosts.compactMap(\.sshAlias))
+        var candidate = "\(base)-copy"
+        var index = 2
+        while existingAliases.contains(candidate) {
+            candidate = "\(base)-copy-\(index)"
+            index += 1
+        }
+        return candidate
     }
 
     private func persistConfiguration() {
