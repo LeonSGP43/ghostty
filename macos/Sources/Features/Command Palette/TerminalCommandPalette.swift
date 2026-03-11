@@ -60,6 +60,7 @@ struct TerminalCommandPaletteView: View {
         var options: [CommandOption] = []
         // Updates always appear first
         options.append(contentsOf: updateOptions)
+        options.append(contentsOf: managerOptions)
 
         // Sort the rest. We replace ":" with a character that sorts before space
         // so that "Foo:" sorts before "Foo Bar:". Use sortKey as a tie-breaker
@@ -78,6 +79,18 @@ struct TerminalCommandPaletteView: View {
             return false
         })
         return options
+    }
+
+    private var managerOptions: [CommandOption] {
+        [
+            CommandOption(
+                title: L10n.CommandPalette.aiManagerTitle,
+                description: L10n.CommandPalette.aiManagerDescription,
+                leadingIcon: "sparkles.rectangle.stack"
+            ) {
+                (NSApp.delegate as? AppDelegate)?.showAITerminalManager(nil)
+            },
+        ]
     }
 
     /// Commands for installing or canceling available updates.

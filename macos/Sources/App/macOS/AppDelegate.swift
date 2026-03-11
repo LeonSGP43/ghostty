@@ -137,6 +137,14 @@ class AppDelegate: NSObject,
         updateController.viewModel
     }
 
+    @MainActor lazy var aiTerminalManagerStore = AITerminalManagerStore(
+        appDelegateProvider: { [weak self] in self }
+    )
+
+    @MainActor lazy var aiTerminalManagerController = AITerminalManagerController(
+        store: aiTerminalManagerStore
+    )
+
     @MainActor lazy var settingsController = SettingsController(appDelegate: self)
 
     /// The elapsed time since the process was started
