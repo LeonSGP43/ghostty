@@ -41,10 +41,10 @@ final class AITerminalManagerStore: ObservableObject {
         var result: [AITerminalHost] = [AITerminalHost.local]
         var seen: Set<String> = [AITerminalHost.local.id]
 
-        for host in configuration.hosts where seen.insert(host.id).inserted {
+        for host in configuration.savedHosts where seen.insert(host.id).inserted {
             result.append(host)
         }
-        for host in importedSSHHosts where seen.insert(host.id).inserted {
+        for host in mergedImportedHosts where seen.insert(host.id).inserted {
             result.append(host)
         }
 
@@ -53,6 +53,44 @@ final class AITerminalManagerStore: ObservableObject {
             if rhs.id == AITerminalHost.local.id { return false }
             return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
         }
+    }
+
+    var savedHosts: [AITerminalHost] {
+        configuration.savedHosts.sorted {
+            $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+        }
+    }
+
+    var mergedImportedHosts: [AITerminalHost] {
+        Self.mergedImportedHosts(imported: importedSSHHosts, overrides: configuration.importedHostOverrides)
+    }
+
+    nonisolated static func mergedImportedHosts(
+        imported: [AITerminalHost],
+        overrides: [AITerminalHost]
+    ) -> [AITerminalHost] {
+        let overrideLookup = Dictionary(uniqueKeysWithValues: overrides.map { ($0.id, $0) })
+        return imported.map { host in
+            guard let override = overrideLookup[host.id] else { return host }
+            var merged = host
+            merged.name = override.name
+            merged.sshAlias = override.sshAlias
+            merged.hostname = override.hostname
+            merged.user = override.user
+            merged.port = override.port
+            merged.defaultDirectory = override.defaultDirectory
+            return merged
+        }
+        .sorted {
+            $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+        }
+    }
+
+    var recentHosts: [AITerminalHost] {
+        let lookup = Dictionary(uniqueKeysWithValues: availableHosts.map { ($0.id, $0) })
+        return configuration.recentHosts
+            .sorted { $0.connectedAt > $1.connectedAt }
+            .compactMap { lookup[$0.id] }
     }
 
     var workspaces: [AITerminalWorkspaceTemplate] {
@@ -67,7 +105,15 @@ final class AITerminalManagerStore: ObservableObject {
     }
 
     func isUserManagedHost(_ host: AITerminalHost) -> Bool {
-        configuration.hosts.contains(where: { $0.id == host.id })
+        configuration.savedHosts.contains(where: { $0.id == host.id })
+    }
+
+    func isImportedHost(_ host: AITerminalHost) -> Bool {
+        importedSSHHosts.contains(where: { $0.id == host.id })
+    }
+
+    func isImportedHostOverridden(_ host: AITerminalHost) -> Bool {
+        configuration.importedHostOverrides.contains(where: { $0.id == host.id })
     }
 
     func refresh() {
@@ -103,10 +149,12 @@ final class AITerminalManagerStore: ObservableObject {
 
         guard let plan = AITerminalLaunchPlan.remote(host: host, directoryOverride: directoryOverride) else {
             lastError = L10n.AITerminalManager.hostMissingSSHDetails
+            recordRecentHost(host.id, status: .failed, errorSummary: lastError)
             return
         }
 
         launch(plan)
+        recordRecentHost(host.id, status: .connected)
     }
 
     func open(workspace: AITerminalWorkspaceTemplate) {
@@ -120,6 +168,9 @@ final class AITerminalManagerStore: ObservableObject {
         }
 
         launch(plan)
+        if !host.isLocal {
+            recordRecentHost(host.id, status: .connected)
+        }
     }
 
     func addWorkspaceFromOpenPanel() {
@@ -197,10 +248,18 @@ final class AITerminalManagerStore: ObservableObject {
             source: .configurationFile
         )
 
-        configuration.hosts.removeAll { $0.id == host.id }
-        configuration.hosts.append(host)
-        configuration.hosts.sort {
-            $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+        if importedSSHHosts.contains(where: { $0.id == host.id }) {
+            configuration.importedHostOverrides.removeAll { $0.id == host.id }
+            configuration.importedHostOverrides.append(host)
+            configuration.importedHostOverrides.sort {
+                $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+            }
+        } else {
+            configuration.savedHosts.removeAll { $0.id == host.id }
+            configuration.savedHosts.append(host)
+            configuration.savedHosts.sort {
+                $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+            }
         }
         lastError = nil
         persistConfiguration()
@@ -208,10 +267,20 @@ final class AITerminalManagerStore: ObservableObject {
     }
 
     func removeHost(_ host: AITerminalHost) {
-        configuration.hosts.removeAll { $0.id == host.id }
+        configuration.savedHosts.removeAll { $0.id == host.id }
+        configuration.importedHostOverrides.removeAll { $0.id == host.id }
+        configuration.recentHosts.removeAll { $0.id == host.id }
         if !importedSSHHosts.contains(where: { $0.id == host.id }) {
             configuration.workspaces.removeAll { $0.hostID == host.id }
         }
+        lastError = nil
+        persistConfiguration()
+        rebuildSessions()
+    }
+
+    func resetImportedHostOverride(_ host: AITerminalHost) {
+        configuration.importedHostOverrides.removeAll { $0.id == host.id }
+        configuration.recentHosts.removeAll { $0.id == host.id }
         lastError = nil
         persistConfiguration()
         rebuildSessions()
@@ -624,6 +693,37 @@ final class AITerminalManagerStore: ObservableObject {
             .appendingPathComponent("config")
         guard let contents = try? String(contentsOf: sshConfig, encoding: .utf8) else { return [] }
         return AITerminalSSHConfigParser.parse(contents)
+    }
+
+    private func recordRecentHost(
+        _ hostID: String,
+        status: AITerminalRecentHostRecord.Status,
+        errorSummary: String? = nil
+    ) {
+        guard hostID != AITerminalHost.local.id else { return }
+        configuration.recentHosts = Self.upsertRecentHostRecord(
+            configuration.recentHosts,
+            hostID: hostID,
+            status: status,
+            errorSummary: errorSummary
+        )
+        persistConfiguration()
+    }
+
+    nonisolated static func upsertRecentHostRecord(
+        _ records: [AITerminalRecentHostRecord],
+        hostID: String,
+        status: AITerminalRecentHostRecord.Status,
+        errorSummary: String? = nil,
+        now: Date = .now
+    ) -> [AITerminalRecentHostRecord] {
+        var next = records
+        next.removeAll { $0.id == hostID }
+        next.insert(
+            .init(id: hostID, connectedAt: now, status: status, errorSummary: errorSummary),
+            at: 0
+        )
+        return Array(next.prefix(8))
     }
 
     private func persistConfiguration() {

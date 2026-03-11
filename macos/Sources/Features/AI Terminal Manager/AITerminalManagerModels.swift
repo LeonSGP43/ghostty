@@ -140,6 +140,30 @@ struct AITerminalHost: Identifiable, Codable, Hashable, Sendable {
     }
 }
 
+struct AITerminalRecentHostRecord: Identifiable, Codable, Hashable, Sendable {
+    enum Status: String, Codable, Sendable {
+        case connected
+        case failed
+    }
+
+    let id: String
+    var connectedAt: Date
+    var status: Status
+    var errorSummary: String?
+
+    init(
+        id: String,
+        connectedAt: Date = .now,
+        status: Status,
+        errorSummary: String? = nil
+    ) {
+        self.id = id
+        self.connectedAt = connectedAt
+        self.status = status
+        self.errorSummary = errorSummary
+    }
+}
+
 struct AITerminalWorkspaceTemplate: Identifiable, Codable, Hashable, Sendable {
     let id: String
     var name: String
@@ -167,18 +191,59 @@ struct ShannonSupervisorConfiguration: Codable, Hashable, Sendable {
 }
 
 struct AITerminalManagerConfiguration: Codable, Sendable {
-    var hosts: [AITerminalHost]
+    var schemaVersion: Int
+    var savedHosts: [AITerminalHost]
+    var importedHostOverrides: [AITerminalHost]
+    var recentHosts: [AITerminalRecentHostRecord]
     var workspaces: [AITerminalWorkspaceTemplate]
     var supervisor: ShannonSupervisorConfiguration
 
     init(
-        hosts: [AITerminalHost] = [],
+        schemaVersion: Int = 1,
+        savedHosts: [AITerminalHost] = [],
+        importedHostOverrides: [AITerminalHost] = [],
+        recentHosts: [AITerminalRecentHostRecord] = [],
         workspaces: [AITerminalWorkspaceTemplate] = [],
         supervisor: ShannonSupervisorConfiguration = .init()
     ) {
-        self.hosts = hosts
+        self.schemaVersion = schemaVersion
+        self.savedHosts = savedHosts
+        self.importedHostOverrides = importedHostOverrides
+        self.recentHosts = recentHosts
         self.workspaces = workspaces
         self.supervisor = supervisor
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case schemaVersion
+        case savedHosts
+        case importedHostOverrides
+        case recentHosts
+        case workspaces
+        case supervisor
+        case hosts
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        schemaVersion = try container.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 1
+        savedHosts = try container.decodeIfPresent([AITerminalHost].self, forKey: .savedHosts)
+            ?? container.decodeIfPresent([AITerminalHost].self, forKey: .hosts)
+            ?? []
+        importedHostOverrides = try container.decodeIfPresent([AITerminalHost].self, forKey: .importedHostOverrides) ?? []
+        recentHosts = try container.decodeIfPresent([AITerminalRecentHostRecord].self, forKey: .recentHosts) ?? []
+        workspaces = try container.decodeIfPresent([AITerminalWorkspaceTemplate].self, forKey: .workspaces) ?? []
+        supervisor = try container.decodeIfPresent(ShannonSupervisorConfiguration.self, forKey: .supervisor) ?? .init()
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(schemaVersion, forKey: .schemaVersion)
+        try container.encode(savedHosts, forKey: .savedHosts)
+        try container.encode(importedHostOverrides, forKey: .importedHostOverrides)
+        try container.encode(recentHosts, forKey: .recentHosts)
+        try container.encode(workspaces, forKey: .workspaces)
+        try container.encode(supervisor, forKey: .supervisor)
     }
 }
 
