@@ -99,9 +99,17 @@ V1 目标不是做成完整分布式运维平台，而是先交付一个**高性
 
 ### 当前测试入口
 
+- 菜单入口：`Ghostty` → `AI Terminal Manager…`
 - 命令面板入口：`Open: AI Terminal Manager`
 - 测试文件：`macos/Tests/AITerminalManager/AITerminalManagerTests.swift`
 - 测试文件：`macos/Tests/Localization/AppLocalizationTests.swift`
+
+### 构建目录约定
+
+- 标准 macOS 构建输出目录：`macos/build`
+- 不要在仓库根目录直接执行 `xcodebuild ... SYMROOT=macos/build`
+- 若必须直接使用 `xcodebuild`，应先进入 `macos/` 目录，再使用 `SYMROOT=build`
+- 推荐统一入口：`nu macos/build.nu`
 
 ### 已验证结果
 
@@ -113,7 +121,8 @@ V1 目标不是做成完整分布式运维平台，而是先交付一个**高性
 - 已成功执行：
   - `zig build -Demit-macos-app=false`
   - `swiftlint lint 'macos/Sources/App/macOS/AppDelegate.swift' 'macos/Sources/Features/AI Terminal Manager/AITerminalManagerStore.swift' 'macos/Sources/Features/AI Terminal Manager/AITerminalManagerView.swift' 'macos/Tests/AITerminalManager/AITerminalManagerTests.swift'`
-  - `env -i HOME="$HOME" PATH="/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcodebuild -project macos/Ghostty.xcodeproj -scheme Ghostty -configuration Debug SYMROOT=macos/build -skip-testing GhosttyUITests test`
+  - `nu macos/build.nu --scheme Ghostty --configuration Debug --action test`
+  - 如需直跑：`cd macos && env -i HOME="$HOME" PATH="/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin" xcodebuild -project Ghostty.xcodeproj -scheme Ghostty -configuration Debug SYMROOT=build -skip-testing GhosttyUITests test`
 - 当前这轮国际化改动已验证：
   - `swiftlint` 通过
   - `macos/build.nu --action test` 已完成构建与链接

@@ -86,6 +86,12 @@ struct AppLocalizationTests {
         )
         #expect(
             AppLocalization.localizedText(
+                "AI Terminal Manager…",
+                preferredLanguages: ["zh-Hans"]
+            ) == "AI 终端管理器…"
+        )
+        #expect(
+            AppLocalization.localizedText(
                 "Enable window decorations to use tabs",
                 preferredLanguages: ["zh-Hans"]
             ) == "启用窗口装饰后才能使用标签页"

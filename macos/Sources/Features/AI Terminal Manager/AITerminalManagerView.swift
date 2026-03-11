@@ -15,6 +15,13 @@ struct AITerminalManagerView: View {
     @State private var sessionInput = ""
 
     var body: some View {
+        ScrollView([.horizontal, .vertical]) {
+            content
+        }
+        .frame(minWidth: 1120, minHeight: 760)
+    }
+
+    private var content: some View {
         VStack(alignment: .leading, spacing: 16) {
             header
 
@@ -41,7 +48,7 @@ struct AITerminalManagerView: View {
             }
         }
         .padding(20)
-        .frame(minWidth: 960, minHeight: 680)
+        .frame(minWidth: 1120, minHeight: 760, alignment: .topLeading)
     }
 
     private var header: some View {
