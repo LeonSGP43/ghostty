@@ -19,6 +19,7 @@ final class MockSSHConnectionCredentialStore: SSHConnectionCredentialStore {
     }
 }
 
+@Suite(.serialized)
 struct AITerminalManagerTests {
     @Test @MainActor func sshConnectionsWindowsWithoutTabGroupsAreNotTreatedAsSameGroup() {
         let lhs = NSWindow()
