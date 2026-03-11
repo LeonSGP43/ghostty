@@ -213,6 +213,106 @@ struct AITerminalManagerTests {
         #expect(records.first?.errorSummary == "Permission denied")
     }
 
+    @Test func reconcilesImportedOverridesAndRecentRecords() {
+        let configuration = AITerminalManagerConfiguration(
+            savedHosts: [
+                AITerminalHost(
+                    id: "ssh:saved",
+                    name: "Saved",
+                    transport: .ssh,
+                    sshAlias: "saved",
+                    hostname: nil,
+                    user: nil,
+                    port: nil,
+                    defaultDirectory: nil,
+                    source: .configurationFile
+                ),
+            ],
+            importedHostOverrides: [
+                AITerminalHost(
+                    id: "ssh:keep",
+                    name: "Keep Override",
+                    transport: .ssh,
+                    sshAlias: "keep",
+                    hostname: nil,
+                    user: nil,
+                    port: nil,
+                    defaultDirectory: nil,
+                    source: .configurationFile
+                ),
+                AITerminalHost(
+                    id: "ssh:stale",
+                    name: "Stale Override",
+                    transport: .ssh,
+                    sshAlias: "stale",
+                    hostname: nil,
+                    user: nil,
+                    port: nil,
+                    defaultDirectory: nil,
+                    source: .configurationFile
+                ),
+            ],
+            recentHosts: [
+                .init(id: "ssh:keep", status: .connected),
+                .init(id: "ssh:saved", status: .connected),
+                .init(id: "ssh:stale", status: .failed),
+            ]
+        )
+
+        let importedHosts = [
+            AITerminalHost(
+                id: "ssh:keep",
+                name: "Keep",
+                transport: .ssh,
+                sshAlias: "keep",
+                hostname: nil,
+                user: nil,
+                port: nil,
+                defaultDirectory: nil,
+                source: .sshConfig
+            ),
+        ]
+
+        let reconciled = AITerminalManagerStore.reconciledConfiguration(
+            configuration,
+            importedHosts: importedHosts
+        )
+
+        #expect(reconciled.importedHostOverrides.map(\.id) == ["ssh:keep"])
+        #expect(reconciled.recentHosts.map(\.id) == ["ssh:keep", "ssh:saved"])
+    }
+
+    @Test @MainActor func reloadImportedSSHHostsUsesInjectedLoader() {
+        let tempURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathExtension("json")
+
+        let store = AITerminalManagerStore(
+            appDelegateProvider: { nil },
+            configurationURL: tempURL,
+            sshConfigHostLoader: {
+                [
+                    AITerminalHost(
+                        id: "ssh:buildbox",
+                        name: "Buildbox",
+                        transport: .ssh,
+                        sshAlias: "buildbox",
+                        hostname: "10.0.0.5",
+                        user: "deploy",
+                        port: 2222,
+                        defaultDirectory: nil,
+                        source: .sshConfig
+                    ),
+                ]
+            }
+        )
+
+        store.reloadImportedSSHHosts()
+
+        #expect(store.importedSSHHosts.map(\.id) == ["ssh:buildbox"])
+        #expect(store.mergedImportedHosts.map(\.id) == ["ssh:buildbox"])
+    }
+
     @Test @MainActor func sendCommandRequiresSessionSelection() {
         let store = AITerminalManagerStore(
             appDelegateProvider: { nil },

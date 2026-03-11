@@ -17,6 +17,7 @@ final class AITerminalManagerStore: ObservableObject {
 
     private let appDelegateProvider: () -> AppDelegate?
     private let configurationURL: URL
+    private let sshConfigHostLoader: () -> [AITerminalHost]
     private let supervisor = ShannonSupervisor()
     private var registrations: [UUID: AITerminalLaunchRegistration] = [:]
     private var taskBindings: [UUID: UUID] = [:]
@@ -24,10 +25,12 @@ final class AITerminalManagerStore: ObservableObject {
 
     init(
         appDelegateProvider: @escaping () -> AppDelegate?,
-        configurationURL: URL? = nil
+        configurationURL: URL? = nil,
+        sshConfigHostLoader: @escaping () -> [AITerminalHost] = { AITerminalManagerStore.loadSSHConfigHostsFromDefaultPath() }
     ) {
         self.appDelegateProvider = appDelegateProvider
         self.configurationURL = configurationURL ?? Self.defaultConfigurationURL()
+        self.sshConfigHostLoader = sshConfigHostLoader
         self.configuration = (try? Self.loadConfiguration(from: self.configurationURL)) ?? .empty
         refresh()
         startPolling()
@@ -121,7 +124,8 @@ final class AITerminalManagerStore: ObservableObject {
             configuration = loaded
         }
 
-        importedSSHHosts = loadSSHConfigHosts()
+        importedSSHHosts = sshConfigHostLoader()
+        reconcileImportedState()
         supervisor.updateAvailability(for: configuration.supervisor)
         supervisorState = supervisor.state
 
@@ -130,6 +134,13 @@ final class AITerminalManagerStore: ObservableObject {
             supervisorState = supervisor.state
         }
 
+        rebuildSessions()
+    }
+
+    func reloadImportedSSHHosts() {
+        importedSSHHosts = sshConfigHostLoader()
+        reconcileImportedState()
+        lastError = nil
         rebuildSessions()
     }
 
@@ -687,7 +698,37 @@ final class AITerminalManagerStore: ObservableObject {
         return L10n.AITerminalManager.defaultTaskTitle
     }
 
-    private func loadSSHConfigHosts() -> [AITerminalHost] {
+    private func reconcileImportedState() {
+        let nextConfiguration = Self.reconciledConfiguration(
+            configuration,
+            importedHosts: importedSSHHosts
+        )
+        guard nextConfiguration.importedHostOverrides != configuration.importedHostOverrides
+            || nextConfiguration.recentHosts != configuration.recentHosts
+        else { return }
+        configuration = nextConfiguration
+        persistConfiguration()
+    }
+
+    nonisolated static func reconciledConfiguration(
+        _ configuration: AITerminalManagerConfiguration,
+        importedHosts: [AITerminalHost]
+    ) -> AITerminalManagerConfiguration {
+        let importedIDs = Set(importedHosts.map(\.id))
+        let savedIDs = Set(configuration.savedHosts.map(\.id))
+        let allowedRecentIDs = importedIDs.union(savedIDs)
+
+        var next = configuration
+        next.importedHostOverrides = configuration.importedHostOverrides.filter {
+            importedIDs.contains($0.id)
+        }
+        next.recentHosts = configuration.recentHosts.filter {
+            allowedRecentIDs.contains($0.id)
+        }
+        return next
+    }
+
+    nonisolated static func loadSSHConfigHostsFromDefaultPath() -> [AITerminalHost] {
         let sshConfig = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent(".ssh")
             .appendingPathComponent("config")
