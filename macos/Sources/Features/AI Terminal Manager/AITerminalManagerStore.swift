@@ -4,8 +4,15 @@ import SwiftUI
 
 @MainActor
 final class AITerminalManagerStore: ObservableObject {
+    private struct PendingSSHPasswordAutomation {
+        var hostID: String
+        var password: String
+        var hasSentPassword: Bool
+    }
+
     @Published private(set) var configuration: AITerminalManagerConfiguration
     @Published private(set) var importedSSHHosts: [AITerminalHost] = []
+    @Published private(set) var remoteSessions: [AITerminalRemoteSessionSummary] = []
     @Published private(set) var sessions: [AITerminalSessionSummary] = []
     @Published private(set) var tasks: [AITerminalTaskRecord] = []
     @Published private(set) var supervisorState: ShannonSupervisorState = .unavailable
@@ -18,19 +25,24 @@ final class AITerminalManagerStore: ObservableObject {
     private let appDelegateProvider: () -> AppDelegate?
     private let configurationURL: URL
     private let sshConfigHostLoader: () -> [AITerminalHost]
+    private let credentialStore: SSHConnectionCredentialStore
     private let supervisor = ShannonSupervisor()
     private var registrations: [UUID: AITerminalLaunchRegistration] = [:]
+    private var sshSessionAuthStates: [UUID: AITerminalSSHSessionAuthState] = [:]
+    private var pendingSSHPasswordAutomations: [UUID: PendingSSHPasswordAutomation] = [:]
     private var taskBindings: [UUID: UUID] = [:]
     private var pollingTimer: Timer?
 
     init(
         appDelegateProvider: @escaping () -> AppDelegate?,
         configurationURL: URL? = nil,
-        sshConfigHostLoader: @escaping () -> [AITerminalHost] = { AITerminalManagerStore.loadSSHConfigHostsFromDefaultPath() }
+        sshConfigHostLoader: @escaping () -> [AITerminalHost] = { AITerminalManagerStore.loadSSHConfigHostsFromDefaultPath() },
+        credentialStore: SSHConnectionCredentialStore = KeychainSSHConnectionCredentialStore()
     ) {
         self.appDelegateProvider = appDelegateProvider
         self.configurationURL = configurationURL ?? Self.defaultConfigurationURL()
         self.sshConfigHostLoader = sshConfigHostLoader
+        self.credentialStore = credentialStore
         self.configuration = (try? Self.loadConfiguration(from: self.configurationURL)) ?? .empty
         refresh()
         startPolling()
@@ -82,6 +94,7 @@ final class AITerminalManagerStore: ObservableObject {
             merged.user = override.user
             merged.port = override.port
             merged.defaultDirectory = override.defaultDirectory
+            merged.authMode = override.authMode
             return merged
         }
         .sorted {
@@ -165,13 +178,22 @@ final class AITerminalManagerStore: ObservableObject {
             return
         }
 
+        let passwordResolution = resolvedPasswordAutomation(for: host)
+        if let message = passwordResolution.error {
+            lastError = message
+            recordRecentHost(host.id, status: .failed, errorSummary: message)
+            return
+        }
+        let savedPassword = passwordResolution.password
+
         guard let plan = AITerminalLaunchPlan.remote(host: host, directoryOverride: directoryOverride) else {
             lastError = L10n.AITerminalManager.hostMissingSSHDetails
             recordRecentHost(host.id, status: .failed, errorSummary: lastError)
             return
         }
 
-        launch(plan)
+        guard let sessionID = launch(plan) else { return }
+        registerRemoteSession(sessionID, host: host, savedPassword: savedPassword)
         recordRecentHost(host.id, status: .connected)
     }
 
@@ -185,7 +207,18 @@ final class AITerminalManagerStore: ObservableObject {
             return
         }
 
-        launch(plan)
+        let passwordResolution = resolvedPasswordAutomation(for: host)
+        if let message = passwordResolution.error {
+            lastError = message
+            recordRecentHost(host.id, status: .failed, errorSummary: message)
+            return
+        }
+        let savedPassword = passwordResolution.password
+
+        guard let sessionID = launch(plan) else { return }
+        if !host.isLocal {
+            registerRemoteSession(sessionID, host: host, savedPassword: savedPassword)
+        }
         if !host.isLocal {
             recordRecentHost(host.id, status: .connected)
         }
@@ -221,13 +254,16 @@ final class AITerminalManagerStore: ObservableObject {
         hostname: String,
         user: String,
         port: String,
-        defaultDirectory: String
+        defaultDirectory: String,
+        authMode: AITerminalHostAuthMode = .system,
+        password: String? = nil
     ) {
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedAlias = sshAlias.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedHostname = hostname.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedUser = user.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedDirectory = defaultDirectory.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedPassword = password?.trimmingCharacters(in: .whitespacesAndNewlines)
 
         guard !trimmedName.isEmpty else {
             lastError = L10n.AITerminalManager.hostNameEmpty
@@ -263,8 +299,31 @@ final class AITerminalManagerStore: ObservableObject {
             user: trimmedUser.isEmpty ? nil : trimmedUser,
             port: parsedPort,
             defaultDirectory: trimmedDirectory.isEmpty ? nil : trimmedDirectory,
-            source: .configurationFile
+            source: .configurationFile,
+            authMode: authMode
         )
+
+        switch authMode {
+        case .system:
+            do {
+                try credentialStore.removePassword(for: hostID)
+            } catch {
+                lastError = L10n.SSHConnections.passwordDeleteFailed(error.localizedDescription)
+                return
+            }
+
+        case .password:
+            guard let trimmedPassword, !trimmedPassword.isEmpty else {
+                lastError = L10n.SSHConnections.passwordRequired
+                return
+            }
+            do {
+                try credentialStore.setPassword(trimmedPassword, for: hostID)
+            } catch {
+                lastError = L10n.SSHConnections.passwordSaveFailed(error.localizedDescription)
+                return
+            }
+        }
 
         if importedSSHHosts.contains(where: { $0.id == host.id }) {
             configuration.importedHostOverrides.removeAll { $0.id == host.id }
@@ -285,6 +344,12 @@ final class AITerminalManagerStore: ObservableObject {
     }
 
     func removeHost(_ host: AITerminalHost) {
+        do {
+            try credentialStore.removePassword(for: host.id)
+        } catch {
+            lastError = L10n.SSHConnections.passwordDeleteFailed(error.localizedDescription)
+            return
+        }
         configuration.savedHosts.removeAll { $0.id == host.id }
         configuration.importedHostOverrides.removeAll { $0.id == host.id }
         configuration.recentHosts.removeAll { $0.id == host.id }
@@ -297,6 +362,12 @@ final class AITerminalManagerStore: ObservableObject {
     }
 
     func resetImportedHostOverride(_ host: AITerminalHost) {
+        do {
+            try credentialStore.removePassword(for: host.id)
+        } catch {
+            lastError = L10n.SSHConnections.passwordDeleteFailed(error.localizedDescription)
+            return
+        }
         configuration.importedHostOverrides.removeAll { $0.id == host.id }
         configuration.recentHosts.removeAll { $0.id == host.id }
         lastError = nil
@@ -563,10 +634,11 @@ final class AITerminalManagerStore: ObservableObject {
         supervisorState = supervisor.state
     }
 
-    private func launch(_ plan: AITerminalLaunchPlan) {
+    @discardableResult
+    private func launch(_ plan: AITerminalLaunchPlan) -> UUID? {
         guard let appDelegate = appDelegateProvider() else {
             lastError = L10n.AITerminalManager.appDelegateUnavailable
-            return
+            return nil
         }
 
         let createdSurface: Ghostty.SurfaceView?
@@ -596,11 +668,12 @@ final class AITerminalManagerStore: ObservableObject {
 
         guard let createdSurface else {
             lastError = L10n.AITerminalManager.createSessionFailed
-            return
+            return nil
         }
 
         registrations[createdSurface.id] = plan.registration
         rebuildSessions()
+        return createdSurface.id
     }
 
     private func rebuildSessions() {
@@ -617,7 +690,7 @@ final class AITerminalManagerStore: ObservableObject {
             .flatMap { controller in
                 controller.surfaceTree.map { surface in
                     let registration = registrations[surface.id]
-                        let task = task(for: surface.id)
+                    let task = task(for: surface.id)
                     let hostLabel = registration
                         .flatMap { $0.hostID }
                         .flatMap { hostLookup[$0]?.name }
@@ -651,6 +724,9 @@ final class AITerminalManagerStore: ObservableObject {
                 return $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending
             }
 
+        processPendingSSHPasswordPrompts()
+        rebuildRemoteSessions(hostLookup: hostLookup)
+
         if let selectedSessionID, sessions.contains(where: { $0.id == selectedSessionID }) {
             refreshSelectedSessionSnapshot()
         } else if self.selectedSessionID != nil {
@@ -675,16 +751,128 @@ final class AITerminalManagerStore: ObservableObject {
     }
 
     private func pruneClosedSessions(activeSessionIDs: Set<UUID>) {
-        let closedSessionIDs = Set(taskBindings.keys).subtracting(activeSessionIDs)
+        let trackedSessionIDs = Set(taskBindings.keys)
+            .union(registrations.keys)
+            .union(sshSessionAuthStates.keys)
+            .union(pendingSSHPasswordAutomations.keys)
+        let closedSessionIDs = trackedSessionIDs.subtracting(activeSessionIDs)
         guard !closedSessionIDs.isEmpty else { return }
 
         for sessionID in closedSessionIDs {
             registrations.removeValue(forKey: sessionID)
+            sshSessionAuthStates.removeValue(forKey: sessionID)
+            pendingSSHPasswordAutomations.removeValue(forKey: sessionID)
             if let taskID = taskBindings.removeValue(forKey: sessionID),
                let index = tasks.firstIndex(where: { $0.id == taskID && $0.state == .active }) {
                 tasks[index].state = .failed
                 tasks[index].updatedAt = .now
                 tasks[index].note = L10n.AITerminalManager.sessionClosed
+            }
+        }
+    }
+
+    private func registerRemoteSession(_ sessionID: UUID, host: AITerminalHost, savedPassword: String?) {
+        if let savedPassword {
+            pendingSSHPasswordAutomations[sessionID] = .init(
+                hostID: host.id,
+                password: savedPassword,
+                hasSentPassword: false
+            )
+            sshSessionAuthStates[sessionID] = .awaitingPassword
+        } else {
+            sshSessionAuthStates[sessionID] = .connecting
+        }
+        rebuildSessions()
+    }
+
+    private func rebuildRemoteSessions(hostLookup: [String: AITerminalHost]) {
+        remoteSessions = sessions.compactMap { session in
+            guard let registration = registrations[session.id],
+                  let hostID = registration.hostID,
+                  hostID != AITerminalHost.local.id,
+                  let host = hostLookup[hostID]
+            else {
+                return nil
+            }
+
+            let authState: AITerminalSSHSessionAuthState
+            if let trackedState = sshSessionAuthStates[session.id] {
+                if pendingSSHPasswordAutomations[session.id] != nil || trackedState == .failed {
+                    authState = trackedState
+                } else {
+                    authState = .connected
+                }
+            } else {
+                authState = .connected
+            }
+
+            return AITerminalRemoteSessionSummary(
+                id: session.id,
+                title: session.title,
+                hostID: hostID,
+                hostName: host.name,
+                hostTarget: host.connectionTarget ?? host.displaySubtitle,
+                workingDirectory: session.workingDirectory,
+                authState: authState,
+                isFocused: session.isFocused
+            )
+        }
+    }
+
+    private func resolvedPasswordAutomation(for host: AITerminalHost) -> (password: String?, error: String?) {
+        guard host.transport == .ssh else { return (nil, nil) }
+
+        switch host.authMode {
+        case .system:
+            return (nil, nil)
+        case .password:
+            do {
+                guard let password = try credentialStore.password(for: host.id), !password.isEmpty else {
+                    return (nil, L10n.SSHConnections.passwordMissing)
+                }
+                return (password, nil)
+            } catch {
+                return (nil, L10n.SSHConnections.passwordReadFailed(error.localizedDescription))
+            }
+        }
+    }
+
+    private func processPendingSSHPasswordPrompts() {
+        guard !pendingSSHPasswordAutomations.isEmpty,
+              let appDelegate = appDelegateProvider()
+        else {
+            return
+        }
+
+        for (sessionID, pending) in pendingSSHPasswordAutomations {
+            guard let surface = appDelegate.findSurface(forUUID: sessionID) else { continue }
+            let visibleText = surface.aiManagerVisibleText()
+
+            if Self.containsSSHAuthenticationFailure(in: visibleText) {
+                sshSessionAuthStates[sessionID] = .failed
+                pendingSSHPasswordAutomations.removeValue(forKey: sessionID)
+                recordRecentHost(
+                    pending.hostID,
+                    status: .failed,
+                    errorSummary: L10n.SSHConnections.authenticationFailed
+                )
+                continue
+            }
+
+            if pending.hasSentPassword {
+                if !Self.containsSSHPasswordPrompt(in: visibleText) {
+                    sshSessionAuthStates[sessionID] = .connected
+                    pendingSSHPasswordAutomations.removeValue(forKey: sessionID)
+                }
+                continue
+            }
+
+            if Self.containsSSHPasswordPrompt(in: visibleText) {
+                surface.aiManagerSendText("\(pending.password)\n")
+                pendingSSHPasswordAutomations[sessionID]?.hasSentPassword = true
+                sshSessionAuthStates[sessionID] = .authenticating
+            } else {
+                sshSessionAuthStates[sessionID] = .awaitingPassword
             }
         }
     }
@@ -799,6 +987,25 @@ final class AITerminalManagerStore: ObservableObject {
             index += 1
         }
         return candidate
+    }
+
+    nonisolated static func containsSSHPasswordPrompt(in text: String) -> Bool {
+        guard let line = lastNonEmptyLine(in: text)?.lowercased() else { return false }
+        return line.hasSuffix("password:") || line.contains("'s password:")
+    }
+
+    nonisolated static func containsSSHAuthenticationFailure(in text: String) -> Bool {
+        let normalized = text.lowercased()
+        return normalized.contains("permission denied")
+            || normalized.contains("connection refused")
+            || normalized.contains("network is unreachable")
+    }
+
+    private nonisolated static func lastNonEmptyLine(in text: String) -> String? {
+        text
+            .split(whereSeparator: \.isNewline)
+            .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
+            .last(where: { !$0.isEmpty })
     }
 
     private func persistConfiguration() {

@@ -152,6 +152,17 @@ enum AppLocalization {
         "ai.manager.task.session_closed": "Session closed before task completed.",
         "ai.manager.task.manage_session": "Manage %@",
         "ai.manager.task.default_title": "Managed Terminal Task",
+        "ssh.connections.error.password_required": "Password is required when using Saved Password authentication.",
+        "ssh.connections.error.password_missing": "No saved password was found for this connection. Edit the connection and save the password again.",
+        "ssh.connections.error.password_save_failed": "Failed to save the SSH password to Keychain: %@",
+        "ssh.connections.error.password_read_failed": "Failed to read the SSH password from Keychain: %@",
+        "ssh.connections.error.password_delete_failed": "Failed to remove the saved SSH password from Keychain: %@",
+        "ssh.connections.error.authentication_failed": "SSH authentication failed.",
+        "ssh.connections.session.auth.connecting": "Connecting",
+        "ssh.connections.session.auth.awaiting_password": "Awaiting Password Prompt",
+        "ssh.connections.session.auth.authenticating": "Authenticating",
+        "ssh.connections.session.auth.connected": "Connected",
+        "ssh.connections.session.auth.failed": "Failed",
         "about.tagline": "Fast, native, feature-rich terminal \nemulator pushing modern features.",
         "about.version": "Version",
         "about.build": "Build",
@@ -322,6 +333,17 @@ enum AppLocalization {
         "ai.manager.task.session_closed": "会话在任务完成前已关闭。",
         "ai.manager.task.manage_session": "托管 %@",
         "ai.manager.task.default_title": "托管终端任务",
+        "ssh.connections.error.password_required": "使用“保存密码”认证时必须填写密码。",
+        "ssh.connections.error.password_missing": "当前连接没有已保存密码。请编辑该连接并重新保存密码。",
+        "ssh.connections.error.password_save_failed": "保存 SSH 密码到 Keychain 失败：%@",
+        "ssh.connections.error.password_read_failed": "从 Keychain 读取 SSH 密码失败：%@",
+        "ssh.connections.error.password_delete_failed": "从 Keychain 删除已保存 SSH 密码失败：%@",
+        "ssh.connections.error.authentication_failed": "SSH 认证失败。",
+        "ssh.connections.session.auth.connecting": "连接中",
+        "ssh.connections.session.auth.awaiting_password": "等待密码提示",
+        "ssh.connections.session.auth.authenticating": "认证中",
+        "ssh.connections.session.auth.connected": "已连接",
+        "ssh.connections.session.auth.failed": "失败",
         "about.tagline": "快速、原生、功能丰富的终端模拟器，持续推进现代终端体验。",
         "about.version": "版本",
         "about.build": "构建号",
@@ -905,6 +927,20 @@ enum L10n {
         nonisolated static var rememberOneDay: String { AppLocalization.localizedString("permission.remember.one_day") }
         nonisolated static func rememberDay(_ value: Int) -> String { AppLocalization.localizedString("permission.remember.day.one", value) }
         nonisolated static func rememberDays(_ value: Int) -> String { AppLocalization.localizedString("permission.remember.day.other", value) }
+    }
+
+    enum SSHConnections {
+        nonisolated static var passwordRequired: String { AppLocalization.localizedString("ssh.connections.error.password_required") }
+        nonisolated static var passwordMissing: String { AppLocalization.localizedString("ssh.connections.error.password_missing") }
+        nonisolated static func passwordSaveFailed(_ message: String) -> String { AppLocalization.localizedString("ssh.connections.error.password_save_failed", message) }
+        nonisolated static func passwordReadFailed(_ message: String) -> String { AppLocalization.localizedString("ssh.connections.error.password_read_failed", message) }
+        nonisolated static func passwordDeleteFailed(_ message: String) -> String { AppLocalization.localizedString("ssh.connections.error.password_delete_failed", message) }
+        nonisolated static var authenticationFailed: String { AppLocalization.localizedString("ssh.connections.error.authentication_failed") }
+        nonisolated static var authStateConnecting: String { AppLocalization.localizedString("ssh.connections.session.auth.connecting") }
+        nonisolated static var authStateAwaitingPassword: String { AppLocalization.localizedString("ssh.connections.session.auth.awaiting_password") }
+        nonisolated static var authStateAuthenticating: String { AppLocalization.localizedString("ssh.connections.session.auth.authenticating") }
+        nonisolated static var authStateConnected: String { AppLocalization.localizedString("ssh.connections.session.auth.connected") }
+        nonisolated static var authStateFailed: String { AppLocalization.localizedString("ssh.connections.session.auth.failed") }
     }
 
     enum AITerminalManager {

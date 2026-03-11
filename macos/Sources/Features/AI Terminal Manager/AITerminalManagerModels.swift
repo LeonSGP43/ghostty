@@ -57,6 +57,13 @@ enum AITerminalTransport: String, Codable, Sendable {
     case ssh
 }
 
+enum AITerminalHostAuthMode: String, Codable, CaseIterable, Identifiable, Sendable {
+    case system
+    case password
+
+    var id: String { rawValue }
+}
+
 struct AITerminalHost: Identifiable, Codable, Hashable, Sendable {
     let id: String
     var name: String
@@ -67,6 +74,72 @@ struct AITerminalHost: Identifiable, Codable, Hashable, Sendable {
     var port: Int?
     var defaultDirectory: String?
     var source: AITerminalHostSource
+    var authMode: AITerminalHostAuthMode
+
+    init(
+        id: String,
+        name: String,
+        transport: AITerminalTransport,
+        sshAlias: String?,
+        hostname: String?,
+        user: String?,
+        port: Int?,
+        defaultDirectory: String?,
+        source: AITerminalHostSource,
+        authMode: AITerminalHostAuthMode = .system
+    ) {
+        self.id = id
+        self.name = name
+        self.transport = transport
+        self.sshAlias = sshAlias
+        self.hostname = hostname
+        self.user = user
+        self.port = port
+        self.defaultDirectory = defaultDirectory
+        self.source = source
+        self.authMode = authMode
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case name
+        case transport
+        case sshAlias
+        case hostname
+        case user
+        case port
+        case defaultDirectory
+        case source
+        case authMode
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        transport = try container.decode(AITerminalTransport.self, forKey: .transport)
+        sshAlias = try container.decodeIfPresent(String.self, forKey: .sshAlias)
+        hostname = try container.decodeIfPresent(String.self, forKey: .hostname)
+        user = try container.decodeIfPresent(String.self, forKey: .user)
+        port = try container.decodeIfPresent(Int.self, forKey: .port)
+        defaultDirectory = try container.decodeIfPresent(String.self, forKey: .defaultDirectory)
+        source = try container.decode(AITerminalHostSource.self, forKey: .source)
+        authMode = try container.decodeIfPresent(AITerminalHostAuthMode.self, forKey: .authMode) ?? .system
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(name, forKey: .name)
+        try container.encode(transport, forKey: .transport)
+        try container.encodeIfPresent(sshAlias, forKey: .sshAlias)
+        try container.encodeIfPresent(hostname, forKey: .hostname)
+        try container.encodeIfPresent(user, forKey: .user)
+        try container.encodeIfPresent(port, forKey: .port)
+        try container.encodeIfPresent(defaultDirectory, forKey: .defaultDirectory)
+        try container.encode(source, forKey: .source)
+        try container.encode(authMode, forKey: .authMode)
+    }
 
     static let local = AITerminalHost(
         id: "local",
@@ -77,7 +150,8 @@ struct AITerminalHost: Identifiable, Codable, Hashable, Sendable {
         user: nil,
         port: nil,
         defaultDirectory: nil,
-        source: .builtIn
+        source: .builtIn,
+        authMode: .system
     )
 
     var isLocal: Bool { transport == .local }
@@ -252,6 +326,35 @@ struct AITerminalLaunchRegistration: Hashable, Sendable {
     var workspaceID: String?
     var managedState: AITerminalManagedState
     var sourceLabel: String
+}
+
+enum AITerminalSSHSessionAuthState: String, Hashable, Sendable {
+    case connecting
+    case awaitingPassword = "awaiting_password"
+    case authenticating
+    case connected
+    case failed
+
+    var displayName: String {
+        switch self {
+        case .connecting: L10n.SSHConnections.authStateConnecting
+        case .awaitingPassword: L10n.SSHConnections.authStateAwaitingPassword
+        case .authenticating: L10n.SSHConnections.authStateAuthenticating
+        case .connected: L10n.SSHConnections.authStateConnected
+        case .failed: L10n.SSHConnections.authStateFailed
+        }
+    }
+}
+
+struct AITerminalRemoteSessionSummary: Identifiable, Hashable {
+    let id: UUID
+    var title: String
+    var hostID: String
+    var hostName: String
+    var hostTarget: String
+    var workingDirectory: String?
+    var authState: AITerminalSSHSessionAuthState
+    var isFocused: Bool
 }
 
 struct AITerminalSessionSummary: Identifiable, Hashable {

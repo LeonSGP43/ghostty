@@ -2,6 +2,22 @@ import Testing
 import Foundation
 @testable import Ghostty
 
+final class MockSSHConnectionCredentialStore: SSHConnectionCredentialStore {
+    var passwords: [String: String] = [:]
+
+    func password(for hostID: String) throws -> String? {
+        passwords[hostID]
+    }
+
+    func setPassword(_ password: String, for hostID: String) throws {
+        passwords[hostID] = password
+    }
+
+    func removePassword(for hostID: String) throws {
+        passwords.removeValue(forKey: hostID)
+    }
+}
+
 struct AITerminalManagerTests {
     @Test func decodesLegacyHostConfigurationIntoSavedHosts() throws {
         let data = Data(#"{"hosts":[{"id":"ssh:buildbox","name":"Buildbox","transport":"ssh","sshAlias":"buildbox","hostname":"10.0.0.5","user":"deploy","port":2222,"defaultDirectory":"/srv/app","source":"configuration_file"}],"workspaces":[],"supervisor":{"arguments":[],"autoStart":false,"environment":{}}}"#.utf8)
@@ -9,6 +25,7 @@ struct AITerminalManagerTests {
 
         #expect(configuration.savedHosts.count == 1)
         #expect(configuration.savedHosts.first?.id == "ssh:buildbox")
+        #expect(configuration.savedHosts.first?.authMode == .system)
         #expect(configuration.importedHostOverrides.isEmpty)
     }
 
@@ -74,7 +91,8 @@ struct AITerminalManagerTests {
                 user: "deploy",
                 port: 2200,
                 defaultDirectory: "/srv/prod",
-                source: .configurationFile
+                source: .configurationFile,
+                authMode: .password
             ),
         ]
 
@@ -83,6 +101,7 @@ struct AITerminalManagerTests {
         #expect(merged.first?.name == "Buildbox Prod")
         #expect(merged.first?.port == 2200)
         #expect(merged.first?.defaultDirectory == "/srv/prod")
+        #expect(merged.first?.authMode == .password)
     }
 
     @Test func localWorkspacePlanUsesWorkingDirectory() throws {
@@ -121,6 +140,7 @@ struct AITerminalManagerTests {
         #expect(store.configuration.savedHosts.first?.sshAlias == "buildbox")
         #expect(store.configuration.savedHosts.first?.port == 2222)
         #expect(store.configuration.savedHosts.first?.id == "ssh:buildbox")
+        #expect(store.configuration.savedHosts.first?.authMode == .system)
     }
 
     @Test @MainActor func storeUpdatesExistingHostByStableID() throws {
@@ -158,6 +178,70 @@ struct AITerminalManagerTests {
         #expect(store.configuration.savedHosts.first?.defaultDirectory == "/srv/prod")
     }
 
+    @Test @MainActor func storeSavesPasswordHostIntoCredentialStore() {
+        let tempURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathExtension("json")
+        let credentialStore = MockSSHConnectionCredentialStore()
+
+        let store = AITerminalManagerStore(
+            appDelegateProvider: { nil },
+            configurationURL: tempURL,
+            credentialStore: credentialStore
+        )
+
+        store.saveHost(
+            name: "Buildbox",
+            sshAlias: "buildbox",
+            hostname: "",
+            user: "deploy",
+            port: "22",
+            defaultDirectory: "/srv/app",
+            authMode: .password,
+            password: "secret"
+        )
+
+        #expect(store.configuration.savedHosts.first?.authMode == .password)
+        #expect(credentialStore.passwords["ssh:buildbox"] == "secret")
+    }
+
+    @Test @MainActor func storeSwitchingBackToSystemAuthRemovesSavedPassword() {
+        let tempURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathExtension("json")
+        let credentialStore = MockSSHConnectionCredentialStore()
+
+        let store = AITerminalManagerStore(
+            appDelegateProvider: { nil },
+            configurationURL: tempURL,
+            credentialStore: credentialStore
+        )
+
+        store.saveHost(
+            name: "Buildbox",
+            sshAlias: "buildbox",
+            hostname: "",
+            user: "deploy",
+            port: "22",
+            defaultDirectory: "",
+            authMode: .password,
+            password: "secret"
+        )
+        store.saveHost(
+            existingHostID: "ssh:buildbox",
+            name: "Buildbox",
+            sshAlias: "buildbox",
+            hostname: "",
+            user: "deploy",
+            port: "22",
+            defaultDirectory: "",
+            authMode: .system
+        )
+
+        #expect(store.configuration.savedHosts.first?.authMode == .system)
+        #expect(credentialStore.passwords["ssh:buildbox"] == nil)
+    }
+
     @Test func taskStateLocalizationSupportsEnglishAndChinese() {
         #expect(
             AppLocalization.localizedString(
@@ -183,6 +267,14 @@ struct AITerminalManagerTests {
         #expect(AITerminalManagerStore.textPayload(for: "y") == "y")
         #expect(AITerminalManagerStore.textPayload(for: "line1\nline2") == "line1\nline2")
         #expect(AITerminalManagerStore.textPayload(for: "") == nil)
+    }
+
+    @Test func detectsCommonSSHAuthenticationPromptsAndFailures() {
+        #expect(AITerminalManagerStore.containsSSHPasswordPrompt(in: "deploy@10.0.0.5's password:"))
+        #expect(AITerminalManagerStore.containsSSHPasswordPrompt(in: "Password:"))
+        #expect(!AITerminalManagerStore.containsSSHPasswordPrompt(in: "deploy@buildbox:~$"))
+        #expect(AITerminalManagerStore.containsSSHAuthenticationFailure(in: "Permission denied, please try again."))
+        #expect(AITerminalManagerStore.containsSSHAuthenticationFailure(in: "ssh: connect to host 10.0.0.5 port 22: Connection refused"))
     }
 
     @Test func recentHostRecordsAreUpdatedAndTrimmed() {
