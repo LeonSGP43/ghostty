@@ -43,8 +43,6 @@ struct NewTerminalIntent: AppIntent {
     )
     var parent: TerminalEntity?
 
-    // Performing in the background can avoid opening multiple windows at the same time
-    // using `foreground` will cause `perform` and `AppDelegate.applicationDidBecomeActive(_:)`/`AppDelegate.applicationShouldHandleReopen(_:hasVisibleWindows:)` running at the 'same' time
 #if compiler(>=6.2)
     @available(macOS 26.0, *)
     static var supportedModes: IntentModes = .background
@@ -65,19 +63,15 @@ struct NewTerminalIntent: AppIntent {
 
         var config = Ghostty.SurfaceConfiguration()
 
-        // We don't run command as "command" and instead use "initialInput" so
-        // that we can get all the login scripts to setup things like PATH.
         if let command {
             config.initialInput = "\(Ghostty.Shell.quote(command)); exit\n"
         }
 
-        // If we were given a working directory then open that directory
         if let url = workingDirectory?.fileURL {
             let dir = url.hasDirectoryPath ? url : url.deletingLastPathComponent()
             config.workingDirectory = dir.path(percentEncoded: false)
         }
 
-        // Parse environment variables from KEY=VALUE format
         for envVar in env {
             if let separatorIndex = envVar.firstIndex(of: "=") {
                 let key = String(envVar[..<separatorIndex])
@@ -86,7 +80,6 @@ struct NewTerminalIntent: AppIntent {
             }
         }
 
-        // Determine if we have a parent and get it
         let parent: Ghostty.SurfaceView?
         if let parentParam = self.parent {
             guard let view = parentParam.surfaceView else {
@@ -142,8 +135,6 @@ struct NewTerminalIntent: AppIntent {
         return .result(value: .none)
     }
 }
-
-// MARK: NewTerminalLocation
 
 enum NewTerminalLocation: String {
     case tab

@@ -59,17 +59,17 @@ private struct PermissionRequestView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 8) {
-                Text("Enable automatic updates?")
+                Text(AppLocalization.localizedText("Enable automatic updates?"))
                     .font(.system(size: 13, weight: .semibold))
 
-                Text("Ghostty can automatically check for updates in the background.")
+                Text(AppLocalization.localizedText("Ghostty can automatically check for updates in the background."))
                     .font(.system(size: 11))
                     .foregroundColor(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
             HStack(spacing: 8) {
-                Button("Not Now") {
+                Button(AppLocalization.localizedText("Not Now")) {
                     request.reply(SUUpdatePermissionResponse(
                         automaticUpdateChecks: false,
                         sendSystemProfile: false))
@@ -79,7 +79,7 @@ private struct PermissionRequestView: View {
 
                 Spacer()
 
-                Button("Allow") {
+                Button(AppLocalization.localizedText("Allow")) {
                     request.reply(SUUpdatePermissionResponse(
                         automaticUpdateChecks: true,
                         sendSystemProfile: false))
@@ -102,13 +102,13 @@ private struct CheckingView: View {
             HStack(spacing: 10) {
                 ProgressView()
                     .controlSize(.small)
-                Text("Checking for updates…")
+                Text(AppLocalization.localizedText("Checking for updates…"))
                     .font(.system(size: 13))
             }
 
             HStack {
                 Spacer()
-                Button("Cancel") {
+                Button(AppLocalization.localizedText("Cancel")) {
                     checking.cancel()
                     dismiss()
                 }
@@ -130,12 +130,12 @@ private struct UpdateAvailableView: View {
         VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: 12) {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Update Available")
+                    Text(AppLocalization.localizedText("Update Available"))
                         .font(.system(size: 13, weight: .semibold))
 
                     VStack(alignment: .leading, spacing: 4) {
                         HStack(spacing: 6) {
-                            Text("Version:")
+                            Text(AppLocalization.localizedText("Version:"))
                                 .foregroundColor(.secondary)
                                 .frame(width: labelWidth, alignment: .trailing)
                             Text(update.appcastItem.displayVersionString)
@@ -144,7 +144,7 @@ private struct UpdateAvailableView: View {
 
                         if update.appcastItem.contentLength > 0 {
                             HStack(spacing: 6) {
-                                Text("Size:")
+                                Text(AppLocalization.localizedText("Size:"))
                                     .foregroundColor(.secondary)
                                     .frame(width: labelWidth, alignment: .trailing)
                                 Text(ByteCountFormatter.string(fromByteCount: Int64(update.appcastItem.contentLength), countStyle: .file))
@@ -154,7 +154,7 @@ private struct UpdateAvailableView: View {
 
                         if let date = update.appcastItem.date {
                             HStack(spacing: 6) {
-                                Text("Released:")
+                                Text(AppLocalization.localizedText("Released:"))
                                     .foregroundColor(.secondary)
                                     .frame(width: labelWidth, alignment: .trailing)
                                 Text(date.formatted(date: .abbreviated, time: .omitted))
@@ -166,13 +166,13 @@ private struct UpdateAvailableView: View {
                 }
 
                 HStack(spacing: 8) {
-                    Button("Skip") {
+                    Button(AppLocalization.localizedText("Skip")) {
                         update.reply(.skip)
                         dismiss()
                     }
                     .controlSize(.small)
 
-                    Button("Later") {
+                    Button(AppLocalization.localizedText("Later")) {
                         update.reply(.dismiss)
                         dismiss()
                     }
@@ -181,7 +181,7 @@ private struct UpdateAvailableView: View {
 
                     Spacer()
 
-                    Button("Install and Relaunch") {
+                    Button(AppLocalization.localizedText("Install and Relaunch")) {
                         update.reply(.install)
                         dismiss()
                     }
@@ -224,7 +224,7 @@ private struct DownloadingView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 8) {
-                Text("Downloading Update")
+                Text(AppLocalization.localizedText("Downloading Update"))
                     .font(.system(size: 13, weight: .semibold))
 
                 if let expectedLength = download.expectedLength, expectedLength > 0 {
@@ -243,7 +243,7 @@ private struct DownloadingView: View {
 
             HStack {
                 Spacer()
-                Button("Cancel") {
+                Button(AppLocalization.localizedText("Cancel")) {
                     download.cancel()
                     dismiss()
                 }
@@ -260,7 +260,7 @@ private struct ExtractingView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Preparing Update")
+            Text(AppLocalization.localizedText("Preparing Update"))
                 .font(.system(size: 13, weight: .semibold))
 
             VStack(alignment: .leading, spacing: 6) {
@@ -281,17 +281,17 @@ private struct InstallingView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 8) {
-                Text("Restart Required")
+                Text(AppLocalization.localizedText("Restart Required"))
                     .font(.system(size: 13, weight: .semibold))
 
-                Text("The update is ready. Please restart the application to complete the installation.")
+                Text(AppLocalization.localizedText("The update is ready. Please restart the application to complete the installation."))
                     .font(.system(size: 11))
                     .foregroundColor(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
             HStack {
-                Button("Restart Later") {
+                Button(AppLocalization.localizedText("Restart Later")) {
                     installing.dismiss()
                     dismiss()
                 }
@@ -300,7 +300,7 @@ private struct InstallingView: View {
 
                 Spacer()
 
-                Button("Restart Now") {
+                Button(AppLocalization.localizedText("Restart Now")) {
                     installing.retryTerminatingApplication()
                     dismiss()
                 }
@@ -320,10 +320,10 @@ private struct NotFoundView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 8) {
-                Text("No Updates Found")
+                Text(AppLocalization.localizedText("No Updates Found"))
                     .font(.system(size: 13, weight: .semibold))
 
-                Text("You're already running the latest version.")
+                Text(AppLocalization.localizedText("You're already running the latest version."))
                     .font(.system(size: 11))
                     .foregroundColor(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -331,7 +331,7 @@ private struct NotFoundView: View {
 
             HStack {
                 Spacer()
-                Button("OK") {
+                Button(AppLocalization.localizedText("OK")) {
                     notFound.acknowledgement()
                     dismiss()
                 }
@@ -354,7 +354,7 @@ private struct UpdateErrorView: View {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .foregroundColor(.orange)
                         .font(.system(size: 13))
-                    Text("Update Failed")
+                    Text(AppLocalization.localizedText("Update Failed"))
                         .font(.system(size: 13, weight: .semibold))
                 }
 
@@ -365,7 +365,7 @@ private struct UpdateErrorView: View {
             }
 
             HStack(spacing: 8) {
-                Button("OK") {
+                Button(AppLocalization.localizedText("OK")) {
                     error.dismiss()
                     dismiss()
                 }
@@ -374,7 +374,7 @@ private struct UpdateErrorView: View {
 
                 Spacer()
 
-                Button("Retry") {
+                Button(AppLocalization.localizedText("Retry")) {
                     error.retry()
                     dismiss()
                 }

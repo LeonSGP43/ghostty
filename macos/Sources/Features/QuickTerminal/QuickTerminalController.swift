@@ -632,9 +632,9 @@ class QuickTerminalController: BaseTerminalController {
     private func showNoNewTabAlert() {
         guard let window else { return }
         let alert = NSAlert()
-        alert.messageText = "Cannot Create New Tab"
-        alert.informativeText = "Tabs aren't supported in the Quick Terminal."
-        alert.addButton(withTitle: "OK")
+        alert.messageText = L10n.App.cannotCreateNewTab
+        alert.informativeText = AppLocalization.localizedText("Tabs aren't supported in the Quick Terminal.")
+        alert.addButton(withTitle: L10n.App.ok)
         alert.alertStyle = .warning
         alert.beginSheetModal(for: window)
     }

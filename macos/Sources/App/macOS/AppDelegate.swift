@@ -272,7 +272,10 @@ class AppDelegate: NSObject,
 
         // Configure user notifications
         let actions = [
-            UNNotificationAction(identifier: Ghostty.userNotificationActionShow, title: "Show")
+            UNNotificationAction(
+                identifier: Ghostty.userNotificationActionShow,
+                title: AppLocalization.localizedText("Show")
+            )
         ]
 
         let center = UNUserNotificationCenter.current()
@@ -407,10 +410,10 @@ class AppDelegate: NSObject,
 
         // We have some visible window. Show an app-wide modal to confirm quitting.
         let alert = NSAlert()
-        alert.messageText = "Quit Ghostty?"
-        alert.informativeText = "All terminal sessions will be terminated."
-        alert.addButton(withTitle: "Close Ghostty")
-        alert.addButton(withTitle: "Cancel")
+        alert.messageText = L10n.App.quitGhostty
+        alert.informativeText = L10n.App.allSessionsTerminated
+        alert.addButton(withTitle: L10n.App.closeGhostty)
+        alert.addButton(withTitle: L10n.App.cancel)
         alert.alertStyle = .warning
         switch alert.runModal() {
         case .alertFirstButtonReturn:
@@ -520,9 +523,9 @@ class AppDelegate: NSObject,
             // may want to show this as a sheet on the focused window (especially if we're
             // opening a tab). I'm not sure.
             let alert = NSAlert()
-            alert.messageText = "Allow Ghostty to execute \"\(filename)\"?"
-            alert.addButton(withTitle: "Allow")
-            alert.addButton(withTitle: "Cancel")
+            alert.messageText = L10n.App.allowExecute(filename)
+            alert.addButton(withTitle: L10n.App.allow)
+            alert.addButton(withTitle: L10n.App.cancel)
             alert.alertStyle = .warning
             switch alert.runModal() {
             case .alertFirstButtonReturn:
@@ -1072,8 +1075,16 @@ class AppDelegate: NSObject,
     // MARK: - Dock Menu
 
     private func reloadDockMenu() {
-        let newWindow = NSMenuItem(title: "New Window", action: #selector(newWindow), keyEquivalent: "")
-        let newTab = NSMenuItem(title: "New Tab", action: #selector(newTab), keyEquivalent: "")
+        let newWindow = NSMenuItem(
+            title: AppLocalization.localizedText("New Window"),
+            action: #selector(newWindow),
+            keyEquivalent: ""
+        )
+        let newTab = NSMenuItem(
+            title: AppLocalization.localizedText("New Tab"),
+            action: #selector(newTab),
+            keyEquivalent: ""
+        )
 
         dockMenu.removeAllItems()
         dockMenu.addItem(newWindow)
@@ -1276,12 +1287,8 @@ extension AppDelegate {
             guard let error else { return }
             Task { @MainActor in
                 let alert = NSAlert()
-                alert.messageText = "Failed to Set Default Terminal"
-                alert.informativeText = """
-                Ghostty could not be set as the default terminal application.
-
-                Error: \(error.localizedDescription)
-                """
+                alert.messageText = L10n.App.failedSetDefaultTerminal
+                alert.informativeText = L10n.App.setDefaultTerminalFailure(error.localizedDescription)
                 alert.alertStyle = .warning
                 alert.runModal()
             }
@@ -1305,17 +1312,17 @@ extension AppDelegate: NSMenuItemValidation {
 
         case #selector(undo(_:)):
             if undoManager.canUndo {
-                item.title = "Undo \(undoManager.undoActionName)"
+                item.title = L10n.App.undo(undoManager.undoActionName)
             } else {
-                item.title = "Undo"
+                item.title = AppLocalization.localizedText("Undo")
             }
             return undoManager.canUndo
 
         case #selector(redo(_:)):
             if undoManager.canRedo {
-                item.title = "Redo \(undoManager.redoActionName)"
+                item.title = L10n.App.redo(undoManager.redoActionName)
             } else {
-                item.title = "Redo"
+                item.title = AppLocalization.localizedText("Redo")
             }
             return undoManager.canRedo
 

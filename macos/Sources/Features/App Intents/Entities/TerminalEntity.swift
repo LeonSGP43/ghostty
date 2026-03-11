@@ -31,7 +31,6 @@ struct TerminalEntity: AppEntity {
         return rep
     }
 
-    /// Returns the view associated with this entity. This may no longer exist.
     @MainActor
     var surfaceView: Ghostty.SurfaceView? {
         Self.defaultQuery.all.first { $0.id == self.id }
@@ -53,7 +52,6 @@ struct TerminalEntity: AppEntity {
             self.screenshot = nsImage
         }
 
-        // Determine the kind based on the window controller type
         if view.window?.windowController is QuickTerminalController {
             self.kind = .quick
         } else {
@@ -79,7 +77,7 @@ extension TerminalEntity {
 struct TerminalQuery: EntityStringQuery, EnumerableEntityQuery {
     @MainActor
     func entities(for identifiers: [TerminalEntity.ID]) async throws -> [TerminalEntity] {
-        return all.filter {
+        all.filter {
             identifiers.contains($0.id)
         }.map {
             TerminalEntity($0)
@@ -88,7 +86,7 @@ struct TerminalQuery: EntityStringQuery, EnumerableEntityQuery {
 
     @MainActor
     func entities(matching string: String) async throws -> [TerminalEntity] {
-        return all.filter {
+        all.filter {
             $0.title.localizedCaseInsensitiveContains(string)
         }.map {
             TerminalEntity($0)
@@ -97,23 +95,20 @@ struct TerminalQuery: EntityStringQuery, EnumerableEntityQuery {
 
     @MainActor
     func allEntities() async throws -> [TerminalEntity] {
-        return all.map { TerminalEntity($0) }
+        all.map { TerminalEntity($0) }
     }
 
     @MainActor
     func suggestedEntities() async throws -> [TerminalEntity] {
-        return try await allEntities()
+        try await allEntities()
     }
 
     @MainActor
     var all: [Ghostty.SurfaceView] {
-        // Find all of our terminal windows. This will include the quick terminal
-        // but only if it was previously opened.
         let controllers = NSApp.windows.compactMap {
             $0.windowController as? BaseTerminalController
         }
 
-        // Get all our surfaces
         return controllers.flatMap {
             $0.surfaceTree.root?.leaves() ?? []
         }

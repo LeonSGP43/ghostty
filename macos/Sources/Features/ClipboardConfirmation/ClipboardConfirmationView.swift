@@ -14,13 +14,13 @@ struct ClipboardConfirmationView: View {
         static func text(_ action: Action, _ reason: Ghostty.ClipboardRequest) -> String {
             switch (action, reason) {
             case (.cancel, .paste):
-                return "Cancel"
+                return L10n.App.cancel
             case (.cancel, .osc_52_read), (.cancel, .osc_52_write):
-                return "Deny"
+                return L10n.App.deny
             case (.confirm, .paste):
-                return "Paste"
+                return L10n.App.paste
             case (.confirm, .osc_52_read), (.confirm, .osc_52_write):
-                return "Allow"
+                return L10n.App.allow
             }
         }
     }

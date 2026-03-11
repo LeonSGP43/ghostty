@@ -9,8 +9,8 @@ struct ErrorView: View {
                 .frame(width: 128, height: 128)
 
             VStack(alignment: .leading) {
-                Text("Oh, no. 😭").font(.title)
-                Text("Something went fatally wrong.\nCheck the logs and restart Ghostty.")
+                Text(AppLocalization.localizedText("Oh, no. 😭")).font(.title)
+                Text(AppLocalization.localizedText("Something went fatally wrong.\nCheck the logs and restart Ghostty."))
             }
         }
         .padding()

@@ -50,7 +50,7 @@ struct AboutView: View {
                     Text("Ghostty")
                         .bold()
                         .font(.title)
-                    Text("Fast, native, feature-rich terminal \nemulator pushing modern features.")
+                    Text(L10n.About.tagline)
                         .multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true)
                         .font(.caption)
@@ -61,26 +61,26 @@ struct AboutView: View {
 
                 VStack(spacing: 2) {
                     if let version {
-                        PropertyRow(label: "Version", text: version)
+                        PropertyRow(label: L10n.About.version, text: version)
                     }
                     if let build {
-                        PropertyRow(label: "Build", text: build)
+                        PropertyRow(label: L10n.About.build, text: build)
                     }
                     if let commit, commit != "",
                        let url = githubURL?.appendingPathComponent("/commits/\(commit)") {
-                        PropertyRow(label: "Commit", text: commit, url: url)
+                        PropertyRow(label: L10n.About.commit, text: commit, url: url)
                     }
                 }
                 .frame(maxWidth: .infinity)
 
                 HStack(spacing: 8) {
                     if let url = docsURL {
-                        Button("Docs") {
+                        Button(L10n.About.docs) {
                             openURL(url)
                         }
                     }
                     if let url = githubURL {
-                        Button("GitHub") {
+                        Button(L10n.About.github) {
                             openURL(url)
                         }
                     }

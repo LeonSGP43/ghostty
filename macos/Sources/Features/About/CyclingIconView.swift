@@ -21,13 +21,13 @@ struct CyclingIconView: View {
         }
         .contextMenu {
             if let currentIcon = viewModel.currentIcon {
-                Button("Copy Icon Config") {
+                Button(AppLocalization.localizedText("Copy Icon Config")) {
                     NSPasteboard.general.setString("macos-icon = \(currentIcon.rawValue)", forType: .string)
                 }
             }
         }
-        .accessibilityLabel("Ghostty Application Icon")
-        .accessibilityHint("Click to cycle through icon variants")
+        .accessibilityLabel(AppLocalization.localizedText("Ghostty Application Icon"))
+        .accessibilityHint(AppLocalization.localizedText("Click to cycle through icon variants"))
     }
 
     @ViewBuilder

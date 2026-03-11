@@ -26,22 +26,22 @@ struct SurfaceProgressBar: View {
 
     private var accessibilityLabel: String {
         switch report.state {
-        case .error: return "Terminal progress - Error"
-        case .pause: return "Terminal progress - Paused"
-        case .indeterminate: return "Terminal progress - In progress"
-        default: return "Terminal progress"
+        case .error: return AppLocalization.localizedText("Terminal progress - Error")
+        case .pause: return AppLocalization.localizedText("Terminal progress - Paused")
+        case .indeterminate: return AppLocalization.localizedText("Terminal progress - In progress")
+        default: return AppLocalization.localizedText("Terminal progress")
         }
     }
 
     private var accessibilityValue: String {
         if let progress {
-            return "\(progress) percent complete"
+            return L10n.App.progressPercent(progress)
         } else {
             switch report.state {
-            case .error: return "Operation failed"
-            case .pause: return "Operation paused at completion"
-            case .indeterminate: return "Operation in progress"
-            default: return "Indeterminate progress"
+            case .error: return AppLocalization.localizedText("Operation failed")
+            case .pause: return AppLocalization.localizedText("Operation paused at completion")
+            case .indeterminate: return AppLocalization.localizedText("Operation in progress")
+            default: return AppLocalization.localizedText("Indeterminate progress")
             }
         }
     }
@@ -109,4 +109,3 @@ private struct BouncingProgressBar: View {
         }
     }
 }
-

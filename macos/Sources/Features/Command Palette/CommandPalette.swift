@@ -266,7 +266,7 @@ private struct CommandPaletteQuery: View {
             .frame(width: 0, height: 0)
             .accessibilityHidden(true)
 
-            TextField("Execute a command…", text: $query)
+            TextField(AppLocalization.localizedText("Execute a command…"), text: $query)
                 .padding()
                 .font(.system(size: 20, weight: .light))
                 .frame(height: 48)
@@ -292,7 +292,7 @@ private struct CommandTable: View {
 
     var body: some View {
         if options.isEmpty {
-            Text("No matches")
+            Text(AppLocalization.localizedText("No matches"))
                 .foregroundStyle(.secondary)
                 .padding()
         } else {

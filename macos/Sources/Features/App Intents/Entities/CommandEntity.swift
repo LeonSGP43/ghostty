@@ -7,8 +7,6 @@ import Cocoa
 struct CommandEntity: AppEntity {
     let id: ID
 
-    // Note: for macOS 26 we can move all the properties to @ComputedProperty.
-
     @Property(title: "Title")
     var title: String
 
@@ -18,10 +16,8 @@ struct CommandEntity: AppEntity {
     @Property(title: "Action")
     var action: String
 
-    /// The underlying data model
     let command: Ghostty.Command
 
-    /// A command identifier is a composite key based on the terminal and action.
     struct ID: Hashable {
         let terminalId: TerminalEntity.ID
         let actionKey: String
@@ -52,13 +48,12 @@ struct CommandEntity: AppEntity {
 @available(macOS 14.0, *)
 extension CommandEntity.ID: RawRepresentable {
     var rawValue: String {
-        return "\(terminalId):\(actionKey)"
+        "\(terminalId):\(actionKey)"
     }
 
     init?(rawValue: String) {
         let components = rawValue.split(separator: ":", maxSplits: 1)
         guard components.count == 2 else { return nil }
-
         guard let terminalId = TerminalEntity.ID(uuidString: String(components[0])) else {
             return nil
         }
@@ -68,7 +63,6 @@ extension CommandEntity.ID: RawRepresentable {
     }
 }
 
-// Required by AppEntity
 @available(macOS 14.0, *)
 extension CommandEntity.ID: EntityIdentifierConvertible {
     static func entityIdentifier(for entityIdentifierString: String) -> CommandEntity.ID? {
@@ -80,11 +74,8 @@ extension CommandEntity.ID: EntityIdentifierConvertible {
     }
 }
 
-// MARK: EntityQuery
-
 @available(macOS 14.0, *)
 struct CommandQuery: EntityQuery {
-    // Inject our terminal parameter from our command palette intent.
     @IntentParameterDependency<CommandPaletteIntent>(\.$terminal)
     var commandPaletteIntent
 
@@ -93,18 +84,14 @@ struct CommandQuery: EntityQuery {
         guard let appDelegate = NSApp.delegate as? AppDelegate else { return [] }
         let commands = appDelegate.ghostty.config.commandPaletteEntries
 
-        // Extract unique terminal IDs to avoid fetching duplicates
         let terminalIds = Set(identifiers.map(\.terminalId))
         let terminals = try await TerminalEntity.defaultQuery.entities(for: Array(terminalIds))
 
-        // Build a lookup from terminal ID to terminal entity
         let terminalMap: [TerminalEntity.ID: TerminalEntity] =
             terminals.reduce(into: [:]) { result, terminal in
                 result[terminal.id] = terminal
             }
 
-        // Map each identifier to its corresponding CommandEntity. If a command doesn't
-        // exist it maps to nil and is removed via compactMap.
         return identifiers.compactMap { id in
             guard let terminal = terminalMap[id.terminalId],
                   let command = commands.first(where: { $0.actionKey == id.actionKey }) else {

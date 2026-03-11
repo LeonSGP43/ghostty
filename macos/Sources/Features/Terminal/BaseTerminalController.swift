@@ -337,8 +337,8 @@ class BaseTerminalController: NSWindowController,
         let alert = NSAlert()
         alert.messageText = messageText
         alert.informativeText = informativeText
-        alert.addButton(withTitle: "Close")
-        alert.addButton(withTitle: "Cancel")
+        alert.addButton(withTitle: L10n.App.close)
+        alert.addButton(withTitle: L10n.App.cancel)
         alert.alertStyle = .warning
         alert.beginSheetModal(for: window) { response in
             let alertWindow = alert.window
@@ -360,16 +360,16 @@ class BaseTerminalController: NSWindowController,
         guard let window else { return }
 
         let alert = NSAlert()
-        alert.messageText = "Change Tab Title"
-        alert.informativeText = "Leave blank to restore the default."
+        alert.messageText = AppLocalization.localizedText("Change Tab Title...")
+        alert.informativeText = L10n.App.leaveBlankRestoreDefault
         alert.alertStyle = .informational
 
         let textField = NSTextField(frame: NSRect(x: 0, y: 0, width: 250, height: 24))
         textField.stringValue = titleOverride ?? window.title
         alert.accessoryView = textField
 
-        alert.addButton(withTitle: "OK")
-        alert.addButton(withTitle: "Cancel")
+        alert.addButton(withTitle: L10n.App.ok)
+        alert.addButton(withTitle: L10n.App.cancel)
 
         alert.window.initialFirstResponder = textField
 
@@ -417,8 +417,8 @@ class BaseTerminalController: NSWindowController,
         // so SwiftUI does not update any of the bindings to note that window is no longer
         // being shown, and provides no callback to detect this.
         confirmClose(
-            messageText: "Close Terminal?",
-            informativeText: "The terminal still has a running process. If you close the terminal the process will be killed."
+            messageText: L10n.App.closeTerminal,
+            informativeText: AppLocalization.localizedText("The terminal still has a running process. If you close the terminal the process will be killed.")
         ) { [weak self] in
             if let self {
                 self.removeSurfaceNode(node)
@@ -461,7 +461,7 @@ class BaseTerminalController: NSWindowController,
             surfaceTree.removing(node),
             moveFocusTo: nextFocus,
             moveFocusFrom: focusedSurface,
-            undoAction: "Close Terminal"
+            undoAction: AppLocalization.localizedText("Close Terminal")
         )
     }
 

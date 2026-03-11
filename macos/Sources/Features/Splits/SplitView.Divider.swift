@@ -101,18 +101,18 @@ extension SplitView {
         private var axLabel: String {
             switch direction {
             case .horizontal:
-                return "Horizontal split divider"
+                return AppLocalization.localizedText("Horizontal split divider")
             case .vertical:
-                return "Vertical split divider"
+                return AppLocalization.localizedText("Vertical split divider")
             }
         }
 
         private var axHint: String {
             switch direction {
             case .horizontal:
-                return "Drag to resize the left and right panes"
+                return AppLocalization.localizedText("Drag to resize the left and right panes")
             case .vertical:
-                return "Drag to resize the top and bottom panes"
+                return AppLocalization.localizedText("Drag to resize the top and bottom panes")
             }
         }
     }

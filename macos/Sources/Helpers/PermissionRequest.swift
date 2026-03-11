@@ -48,7 +48,7 @@ class PermissionRequest {
 
         // Add buttons (they appear in reverse order)
         alert.addButton(withTitle: allowText)
-        alert.addButton(withTitle: "Don't Allow")
+        alert.addButton(withTitle: L10n.Permission.dontAllow)
 
         // Create checkbox for remembering if duration is provided
         var checkbox: NSButton?
@@ -163,21 +163,26 @@ class PermissionRequest {
         let seconds = duration.timeInterval
 
         // Warning: this probably isn't localization friendly at all so we're
-        // going to have to redo this for that.
         switch seconds {
         case 0..<60:
-            return "Remember my decision for \(Int(seconds)) seconds"
+            return L10n.Permission.rememberSeconds(Int(seconds))
         case 60..<3600:
             let minutes = Int(seconds / 60)
-            return "Remember my decision for \(minutes) minute\(minutes == 1 ? "" : "s")"
+            return minutes == 1
+                ? L10n.Permission.rememberMinute(minutes)
+                : L10n.Permission.rememberMinutes(minutes)
         case 3600..<86400:
             let hours = Int(seconds / 3600)
-            return "Remember my decision for \(hours) hour\(hours == 1 ? "" : "s")"
+            return hours == 1
+                ? L10n.Permission.rememberHour(hours)
+                : L10n.Permission.rememberHours(hours)
         case 86400:
-            return "Remember my decision for one day"
+            return L10n.Permission.rememberOneDay
         default:
             let days = Int(seconds / 86400)
-            return "Remember my decision for \(days) day\(days == 1 ? "" : "s")"
+            return days == 1
+                ? L10n.Permission.rememberDay(days)
+                : L10n.Permission.rememberDays(days)
         }
     }
 

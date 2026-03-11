@@ -261,19 +261,17 @@ extension Ghostty {
         func text() -> String {
             switch self {
             case .paste:
-                return """
-                Pasting this text to the terminal may be dangerous as it looks like some commands may be executed.
-                """
+                return AppLocalization.localizedText(
+                    "Pasting this text to the terminal may be dangerous as it looks like some commands may be executed."
+                )
             case .osc_52_read:
-                return """
-                An application is attempting to read from the clipboard.
-                The current clipboard contents are shown below.
-                """
+                return AppLocalization.localizedText(
+                    "An application is attempting to read from the clipboard.\nThe current clipboard contents are shown below."
+                )
             case .osc_52_write:
-                return """
-                An application is attempting to write to the clipboard.
-                The content to write is shown below.
-                """
+                return AppLocalization.localizedText(
+                    "An application is attempting to write to the clipboard.\nThe content to write is shown below."
+                )
             }
         }
 

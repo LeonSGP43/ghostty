@@ -16,25 +16,25 @@ enum TerminalTabColor: Int, CaseIterable, Codable {
     var localizedName: String {
         switch self {
         case .none:
-            return "None"
+            return AppLocalization.localizedText("None")
         case .blue:
-            return "Blue"
+            return AppLocalization.localizedText("Blue")
         case .purple:
-            return "Purple"
+            return AppLocalization.localizedText("Purple")
         case .pink:
-            return "Pink"
+            return AppLocalization.localizedText("Pink")
         case .red:
-            return "Red"
+            return AppLocalization.localizedText("Red")
         case .orange:
-            return "Orange"
+            return AppLocalization.localizedText("Orange")
         case .yellow:
-            return "Yellow"
+            return AppLocalization.localizedText("Yellow")
         case .green:
-            return "Green"
+            return AppLocalization.localizedText("Green")
         case .teal:
-            return "Teal"
+            return AppLocalization.localizedText("Teal")
         case .graphite:
-            return "Graphite"
+            return AppLocalization.localizedText("Graphite")
         }
     }
 
@@ -120,7 +120,7 @@ struct TabColorMenuView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
-            Text("Tab Color")
+            Text(AppLocalization.localizedText("Tab Color"))
                 .padding(.bottom, 2)
 
             ForEach(Self.paletteRows, id: \.self) { row in

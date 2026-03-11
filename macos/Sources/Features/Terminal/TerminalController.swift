@@ -387,9 +387,9 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
         if let fullscreenStyle = parentController.fullscreenStyle,
            fullscreenStyle.isFullscreen && !fullscreenStyle.supportsTabs {
             let alert = NSAlert()
-            alert.messageText = "Cannot Create New Tab"
-            alert.informativeText = "New tabs are unsupported while in non-native fullscreen. Exit fullscreen and try again."
-            alert.addButton(withTitle: "OK")
+            alert.messageText = L10n.App.cannotCreateNewTab
+            alert.informativeText = L10n.App.newTabsUnsupportedFullscreen
+            alert.addButton(withTitle: L10n.App.ok)
             alert.alertStyle = .warning
             alert.beginSheetModal(for: parent)
             return nil
@@ -746,7 +746,9 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
         }
 
         if let undoManager {
-            undoManager.setActionName("Close Tabs to the Right")
+            undoManager.setActionName(
+                AppLocalization.localizedText("Close Tabs to the Right")
+            )
 
             undoManager.registerUndo(
                 withTarget: self,
@@ -914,10 +916,10 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
         }
 
         let alert = NSAlert()
-        alert.messageText = "Close All Windows?"
-        alert.informativeText = "All terminal sessions will be terminated."
-        alert.addButton(withTitle: "Close All Windows")
-        alert.addButton(withTitle: "Cancel")
+        alert.messageText = L10n.App.closeAllWindowsQuestion
+        alert.informativeText = L10n.App.allSessionsTerminated
+        alert.addButton(withTitle: L10n.App.closeAllWindows)
+        alert.addButton(withTitle: L10n.App.cancel)
         alert.alertStyle = .warning
         alert.beginSheetModal(for: confirmWindow, completionHandler: { response in
             if response == .alertFirstButtonReturn {

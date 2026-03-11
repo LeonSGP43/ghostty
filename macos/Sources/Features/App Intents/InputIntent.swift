@@ -91,7 +91,6 @@ struct KeyEventIntent: AppIntent {
             throw GhosttyIntentError.surfaceNotFound
         }
 
-        // Convert KeyEventMods array to Ghostty.Input.Mods
         let ghosttyMods = mods.reduce(Ghostty.Input.Mods()) { result, mod in
             result.union(mod.ghosttyMod)
         }
@@ -106,8 +105,6 @@ struct KeyEventIntent: AppIntent {
         return .result()
     }
 }
-
-// MARK: MouseButtonIntent
 
 /// App intent to trigger a mouse button event.
 struct MouseButtonIntent: AppIntent {
@@ -155,7 +152,6 @@ struct MouseButtonIntent: AppIntent {
             throw GhosttyIntentError.surfaceNotFound
         }
 
-        // Convert KeyEventMods array to Ghostty.Input.Mods
         let ghosttyMods = mods.reduce(Ghostty.Input.Mods()) { result, mod in
             result.union(mod.ghosttyMod)
         }
@@ -218,7 +214,6 @@ struct MousePosIntent: AppIntent {
             throw GhosttyIntentError.surfaceNotFound
         }
 
-        // Convert KeyEventMods array to Ghostty.Input.Mods
         let ghosttyMods = mods.reduce(Ghostty.Input.Mods()) { result, mod in
             result.union(mod.ghosttyMod)
         }
@@ -298,8 +293,6 @@ struct MouseScrollIntent: AppIntent {
         return .result()
     }
 }
-
-// MARK: Mods
 
 enum KeyEventMods: String, AppEnum, CaseIterable {
     case shift

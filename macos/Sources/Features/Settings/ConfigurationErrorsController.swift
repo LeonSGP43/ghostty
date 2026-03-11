@@ -28,6 +28,7 @@ class ConfigurationErrorsController: NSWindowController, NSWindowDelegate, Confi
         guard let window = window else { return }
         window.center()
         window.level = .popUpMenu
+        window.title = AppLocalization.localizedText("Configuration Errors")
         window.contentView = NSHostingView(rootView: ConfigurationErrorsView(model: self))
     }
 }

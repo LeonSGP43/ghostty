@@ -126,7 +126,7 @@ private struct TerminalSplitLeaf: View {
                 }
             }
             .accessibilityElement(children: .contain)
-            .accessibilityLabel("Terminal pane")
+            .accessibilityLabel(AppLocalization.localizedText("Terminal pane"))
         }
     }
 

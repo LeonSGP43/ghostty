@@ -555,8 +555,8 @@ extension Ghostty {
         func promptTitle() {
             // Create an alert dialog
             let alert = NSAlert()
-            alert.messageText = "Change Terminal Title"
-            alert.informativeText = "Leave blank to restore the default."
+            alert.messageText = AppLocalization.localizedText("Change Terminal Title...")
+            alert.informativeText = L10n.App.leaveBlankRestoreDefault
             alert.alertStyle = .informational
 
             // Add a text field to the alert
@@ -565,8 +565,8 @@ extension Ghostty {
             alert.accessoryView = textField
 
             // Add buttons
-            alert.addButton(withTitle: "OK")
-            alert.addButton(withTitle: "Cancel")
+            alert.addButton(withTitle: L10n.App.ok)
+            alert.addButton(withTitle: L10n.App.cancel)
 
             // Make the text field the first responder so it gets focus
             alert.window.initialFirstResponder = textField
@@ -1472,32 +1472,32 @@ extension Ghostty {
 
             // If we have a selection, add copy
             if let text = self.accessibilitySelectedText(), text.count > 0 {
-                menu.addItem(withTitle: "Copy", action: #selector(copy(_:)), keyEquivalent: "")
+                menu.addItem(withTitle: AppLocalization.localizedText("Copy"), action: #selector(copy(_:)), keyEquivalent: "")
             }
-            menu.addItem(withTitle: "Paste", action: #selector(paste(_:)), keyEquivalent: "")
+            menu.addItem(withTitle: AppLocalization.localizedText("Paste"), action: #selector(paste(_:)), keyEquivalent: "")
 
             menu.addItem(.separator())
-            item = menu.addItem(withTitle: "Split Right", action: #selector(splitRight(_:)), keyEquivalent: "")
+            item = menu.addItem(withTitle: AppLocalization.localizedText("Split Right"), action: #selector(splitRight(_:)), keyEquivalent: "")
             item.setImageIfDesired(systemSymbolName: "rectangle.righthalf.inset.filled")
-            item = menu.addItem(withTitle: "Split Left", action: #selector(splitLeft(_:)), keyEquivalent: "")
+            item = menu.addItem(withTitle: AppLocalization.localizedText("Split Left"), action: #selector(splitLeft(_:)), keyEquivalent: "")
             item.setImageIfDesired(systemSymbolName: "rectangle.leadinghalf.inset.filled")
-            item = menu.addItem(withTitle: "Split Down", action: #selector(splitDown(_:)), keyEquivalent: "")
+            item = menu.addItem(withTitle: AppLocalization.localizedText("Split Down"), action: #selector(splitDown(_:)), keyEquivalent: "")
             item.setImageIfDesired(systemSymbolName: "rectangle.bottomhalf.inset.filled")
-            item = menu.addItem(withTitle: "Split Up", action: #selector(splitUp(_:)), keyEquivalent: "")
+            item = menu.addItem(withTitle: AppLocalization.localizedText("Split Up"), action: #selector(splitUp(_:)), keyEquivalent: "")
             item.setImageIfDesired(systemSymbolName: "rectangle.tophalf.inset.filled")
 
             menu.addItem(.separator())
-            item = menu.addItem(withTitle: "Reset Terminal", action: #selector(resetTerminal(_:)), keyEquivalent: "")
+            item = menu.addItem(withTitle: AppLocalization.localizedText("Reset Terminal"), action: #selector(resetTerminal(_:)), keyEquivalent: "")
             item.setImageIfDesired(systemSymbolName: "arrow.trianglehead.2.clockwise")
-            item = menu.addItem(withTitle: "Toggle Terminal Inspector", action: #selector(toggleTerminalInspector(_:)), keyEquivalent: "")
+            item = menu.addItem(withTitle: AppLocalization.localizedText("Toggle Terminal Inspector"), action: #selector(toggleTerminalInspector(_:)), keyEquivalent: "")
             item.setImageIfDesired(systemSymbolName: "scope")
-            item = menu.addItem(withTitle: "Terminal Read-only", action: #selector(toggleReadonly(_:)), keyEquivalent: "")
+            item = menu.addItem(withTitle: AppLocalization.localizedText("Terminal Read-only"), action: #selector(toggleReadonly(_:)), keyEquivalent: "")
             item.setImageIfDesired(systemSymbolName: "eye.fill")
             item.state = readonly ? .on : .off
             menu.addItem(.separator())
-            item = menu.addItem(withTitle: "Change Tab Title...", action: #selector(BaseTerminalController.changeTabTitle(_:)), keyEquivalent: "")
+            item = menu.addItem(withTitle: AppLocalization.localizedText("Change Tab Title..."), action: #selector(BaseTerminalController.changeTabTitle(_:)), keyEquivalent: "")
             item.setImageIfDesired(systemSymbolName: "pencil.line")
-            item = menu.addItem(withTitle: "Change Terminal Title...", action: #selector(changeTitle(_:)), keyEquivalent: "")
+            item = menu.addItem(withTitle: AppLocalization.localizedText("Change Terminal Title..."), action: #selector(changeTitle(_:)), keyEquivalent: "")
 
             return menu
         }
@@ -2010,6 +2010,23 @@ extension Ghostty.SurfaceView: NSTextInputClient {
     }
 }
 
+extension Ghostty.SurfaceView {
+    @MainActor
+    func aiManagerVisibleText() -> String {
+        cachedVisibleContents.get()
+    }
+
+    @MainActor
+    func aiManagerScreenText() -> String {
+        cachedScreenContents.get()
+    }
+
+    @MainActor
+    func aiManagerSendText(_ text: String) {
+        surfaceModel?.sendText(text)
+    }
+}
+
 // MARK: Services
 
 // https://developer.apple.com/library/archive/documentation/Cocoa/Conceptual/SysServices/Articles/using.html
@@ -2188,7 +2205,7 @@ extension Ghostty.SurfaceView {
     }
 
     override func accessibilityHelp() -> String? {
-        return "Terminal content area"
+        return AppLocalization.localizedText("Terminal content area")
     }
 
     override func accessibilityValue() -> Any? {

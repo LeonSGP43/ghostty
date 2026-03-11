@@ -158,27 +158,27 @@ struct SplitView<L: View, R: View>: View {
     private var splitViewLabel: String {
         switch direction {
         case .horizontal:
-            return "Horizontal split view"
+            return AppLocalization.localizedText("Horizontal split view")
         case .vertical:
-            return "Vertical split view"
+            return AppLocalization.localizedText("Vertical split view")
         }
     }
 
     private var leftPaneLabel: String {
         switch direction {
         case .horizontal:
-            return "Left pane"
+            return AppLocalization.localizedText("Left pane")
         case .vertical:
-            return "Top pane"
+            return AppLocalization.localizedText("Top pane")
         }
     }
 
     private var rightPaneLabel: String {
         switch direction {
         case .horizontal:
-            return "Right pane"
+            return AppLocalization.localizedText("Right pane")
         case .vertical:
-            return "Bottom pane"
+            return AppLocalization.localizedText("Bottom pane")
         }
     }
 }
