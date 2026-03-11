@@ -8,6 +8,7 @@ struct AITerminalManagerView: View {
     @State private var hostUser = ""
     @State private var hostPort = ""
     @State private var hostDefaultDirectory = ""
+    @State private var editingHostID: String?
     @State private var workspaceName = ""
     @State private var workspaceDirectory = ""
     @State private var selectedWorkspaceHostID = AITerminalHost.local.id
@@ -113,6 +114,7 @@ struct AITerminalManagerView: View {
 
                     Button(L10n.AITerminalManager.saveHost) {
                         store.saveHost(
+                            existingHostID: editingHostID,
                             name: hostName,
                             sshAlias: hostAlias,
                             hostname: hostHostname,
@@ -121,12 +123,13 @@ struct AITerminalManagerView: View {
                             defaultDirectory: hostDefaultDirectory
                         )
                         if store.lastError == nil {
-                            hostName = ""
-                            hostAlias = ""
-                            hostHostname = ""
-                            hostUser = ""
-                            hostPort = ""
-                            hostDefaultDirectory = ""
+                            resetHostEditor()
+                        }
+                    }
+
+                    if editingHostID != nil {
+                        Button(L10n.AITerminalManager.cancelEdit) {
+                            resetHostEditor()
                         }
                     }
                 }
@@ -145,8 +148,16 @@ struct AITerminalManagerView: View {
                                 Button(L10n.AITerminalManager.connect) {
                                     store.open(host: host)
                                 }
-                                Button(L10n.AITerminalManager.remove) {
-                                    store.removeHost(host)
+                                Button(L10n.AITerminalManager.edit) {
+                                    beginEditing(host)
+                                }
+                                if store.isUserManagedHost(host) {
+                                    Button(L10n.AITerminalManager.remove) {
+                                        store.removeHost(host)
+                                        if editingHostID == host.id {
+                                            resetHostEditor()
+                                        }
+                                    }
                                 }
                             }
                             Text(host.displaySubtitle)
@@ -230,6 +241,26 @@ struct AITerminalManagerView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+    }
+
+    private func beginEditing(_ host: AITerminalHost) {
+        editingHostID = host.id
+        hostName = host.name
+        hostAlias = host.sshAlias ?? ""
+        hostHostname = host.hostname ?? ""
+        hostUser = host.user ?? ""
+        hostPort = host.port.map(String.init) ?? ""
+        hostDefaultDirectory = host.defaultDirectory ?? ""
+    }
+
+    private func resetHostEditor() {
+        editingHostID = nil
+        hostName = ""
+        hostAlias = ""
+        hostHostname = ""
+        hostUser = ""
+        hostPort = ""
+        hostDefaultDirectory = ""
     }
 
     private var sessionsSection: some View {

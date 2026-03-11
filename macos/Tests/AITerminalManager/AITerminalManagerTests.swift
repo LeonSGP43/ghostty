@@ -76,6 +76,42 @@ struct AITerminalManagerTests {
         #expect(store.configuration.hosts.count == 1)
         #expect(store.configuration.hosts.first?.sshAlias == "buildbox")
         #expect(store.configuration.hosts.first?.port == 2222)
+        #expect(store.configuration.hosts.first?.id == "ssh:buildbox")
+    }
+
+    @Test @MainActor func storeUpdatesExistingHostByStableID() throws {
+        let tempURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathExtension("json")
+
+        let store = AITerminalManagerStore(
+            appDelegateProvider: { nil },
+            configurationURL: tempURL
+        )
+
+        store.saveHost(
+            name: "Buildbox",
+            sshAlias: "buildbox",
+            hostname: "",
+            user: "deploy",
+            port: "2222",
+            defaultDirectory: "/srv/app"
+        )
+
+        store.saveHost(
+            existingHostID: "ssh:buildbox",
+            name: "Buildbox Prod",
+            sshAlias: "buildbox",
+            hostname: "",
+            user: "deploy",
+            port: "2200",
+            defaultDirectory: "/srv/prod"
+        )
+
+        #expect(store.configuration.hosts.count == 1)
+        #expect(store.configuration.hosts.first?.name == "Buildbox Prod")
+        #expect(store.configuration.hosts.first?.port == 2200)
+        #expect(store.configuration.hosts.first?.defaultDirectory == "/srv/prod")
     }
 
     @Test func taskStateLocalizationSupportsEnglishAndChinese() {

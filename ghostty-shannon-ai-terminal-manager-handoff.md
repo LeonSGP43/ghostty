@@ -83,6 +83,9 @@
 ### 4. SSH 测试路径
 
 - 在 `Hosts` 区保存一个 SSH host
+- 已保存的 SSH host 支持 `Edit / Remove`
+- 从 `~/.ssh/config` 导入的 host 支持 `Edit`
+- 编辑导入 host 后，会生成同 ID 的本地覆盖配置并持久化
 - 点击该 host 的 `Connect`
 - 在 `Sessions` 区 `Select`
 - 继续用 `Send Command` / `Refresh Snapshot` 测试

@@ -41,6 +41,15 @@ enum AITerminalHostSource: String, Codable, Sendable {
     case builtIn = "built_in"
     case configurationFile = "configuration_file"
     case sshConfig = "ssh_config"
+
+    var isUserManaged: Bool {
+        switch self {
+        case .builtIn, .sshConfig:
+            false
+        case .configurationFile:
+            true
+        }
+    }
 }
 
 enum AITerminalTransport: String, Codable, Sendable {
@@ -107,6 +116,27 @@ struct AITerminalHost: Identifiable, Codable, Hashable, Sendable {
             return "\(user)@\(hostname)"
         }
         return hostname
+    }
+
+    static func stableID(
+        existingID: String? = nil,
+        sshAlias: String,
+        hostname: String,
+        user: String
+    ) -> String {
+        if let existingID, !existingID.isEmpty {
+            return existingID
+        }
+
+        let trimmedAlias = sshAlias.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedAlias.isEmpty {
+            return "ssh:\(trimmedAlias)"
+        }
+
+        let trimmedHostname = hostname.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedUser = user.trimmingCharacters(in: .whitespacesAndNewlines)
+        let stableKey = trimmedUser.isEmpty ? trimmedHostname : "\(trimmedUser)@\(trimmedHostname)"
+        return "configured:\(stableKey)"
     }
 }
 

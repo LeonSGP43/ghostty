@@ -66,6 +66,10 @@ final class AITerminalManagerStore: ObservableObject {
         return sessions.first(where: { $0.id == selectedSessionID })
     }
 
+    func isUserManagedHost(_ host: AITerminalHost) -> Bool {
+        configuration.hosts.contains(where: { $0.id == host.id })
+    }
+
     func refresh() {
         if let loaded = try? Self.loadConfiguration(from: configurationURL) {
             configuration = loaded
@@ -142,6 +146,7 @@ final class AITerminalManagerStore: ObservableObject {
     }
 
     func saveHost(
+        existingHostID: String? = nil,
         name: String,
         sshAlias: String,
         hostname: String,
@@ -174,9 +179,14 @@ final class AITerminalManagerStore: ObservableObject {
             return
         }
 
-        let stableKey = !trimmedAlias.isEmpty ? trimmedAlias : "\(trimmedUser)@\(trimmedHostname)"
+        let hostID = AITerminalHost.stableID(
+            existingID: existingHostID,
+            sshAlias: trimmedAlias,
+            hostname: trimmedHostname,
+            user: trimmedUser
+        )
         let host = AITerminalHost(
-            id: "configured:\(stableKey)",
+            id: hostID,
             name: trimmedName,
             transport: .ssh,
             sshAlias: trimmedAlias.isEmpty ? nil : trimmedAlias,
@@ -199,7 +209,9 @@ final class AITerminalManagerStore: ObservableObject {
 
     func removeHost(_ host: AITerminalHost) {
         configuration.hosts.removeAll { $0.id == host.id }
-        configuration.workspaces.removeAll { $0.hostID == host.id }
+        if !importedSSHHosts.contains(where: { $0.id == host.id }) {
+            configuration.workspaces.removeAll { $0.hostID == host.id }
+        }
         lastError = nil
         persistConfiguration()
         rebuildSessions()

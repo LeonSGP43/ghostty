@@ -46,6 +46,8 @@ enum AppLocalization {
         "ai.manager.hosts.save": "Save Host",
         "ai.manager.hosts.empty": "No hosts configured yet.",
         "ai.manager.hosts.connect": "Connect",
+        "ai.manager.edit": "Edit",
+        "ai.manager.cancel_edit": "Cancel",
         "ai.manager.remove": "Remove",
         "ai.manager.workspaces": "Workspaces",
         "ai.manager.workspaces.add_local": "Add Local Workspace",
@@ -193,6 +195,8 @@ enum AppLocalization {
         "ai.manager.hosts.save": "保存主机",
         "ai.manager.hosts.empty": "还没有配置任何主机。",
         "ai.manager.hosts.connect": "连接",
+        "ai.manager.edit": "编辑",
+        "ai.manager.cancel_edit": "取消编辑",
         "ai.manager.remove": "移除",
         "ai.manager.workspaces": "工作区",
         "ai.manager.workspaces.add_local": "添加本地工作区",
@@ -882,6 +886,8 @@ enum L10n {
         nonisolated static var saveHost: String { AppLocalization.localizedString("ai.manager.hosts.save") }
         nonisolated static var hostsEmpty: String { AppLocalization.localizedString("ai.manager.hosts.empty") }
         nonisolated static var connect: String { AppLocalization.localizedString("ai.manager.hosts.connect") }
+        nonisolated static var edit: String { AppLocalization.localizedString("ai.manager.edit") }
+        nonisolated static var cancelEdit: String { AppLocalization.localizedString("ai.manager.cancel_edit") }
         nonisolated static var remove: String { AppLocalization.localizedString("ai.manager.remove") }
         nonisolated static var workspaces: String { AppLocalization.localizedString("ai.manager.workspaces") }
         nonisolated static var addLocalWorkspace: String { AppLocalization.localizedString("ai.manager.workspaces.add_local") }

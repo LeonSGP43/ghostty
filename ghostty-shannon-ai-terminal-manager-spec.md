@@ -79,6 +79,8 @@ V1 目标不是做成完整分布式运维平台，而是先交付一个**高性
   - 已配置的 `SSH Host`
 - 自动从 `~/.ssh/config` 导入 SSH host 候选
 - 手动维护 host / workspace 配置并持久化到本地 JSON
+- 已保存 SSH host 支持编辑与删除
+- 导入自 `~/.ssh/config` 的 SSH host 支持编辑并保存为本地覆盖配置
 - 枚举 Ghostty 当前打开的 terminal session
 - 对 session 执行：
   - `Select`
