@@ -1,9 +1,11 @@
 # Ghostty SSH Connections Center Usage
 
-## Open the Connections window
+## Open the Connections page
 
 - Menu: `Ghostty -> Connections…`
 - Command Palette: `Open: Connections`
+- 默认会作为当前 Ghostty 终端窗口中的一个原生 macOS tab 打开。
+- 如果当前没有任何 Ghostty 终端窗口，则会退回为单独窗口。
 
 ## Save a new SSH connection
 
