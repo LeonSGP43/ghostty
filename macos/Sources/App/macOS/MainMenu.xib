@@ -98,12 +98,6 @@
                                     <action selector="showSettings:" target="bbz-4X-AYv" id="X65-fg-iWU"/>
                                 </connections>
                             </menuItem>
-                            <menuItem title="App Language…" id="x3L-ng-0L1">
-                                <modifierMask key="keyEquivalentModifierMask"/>
-                                <connections>
-                                    <action selector="showSettings:" target="bbz-4X-AYv" id="M3H-wM-Fb4"/>
-                                </connections>
-                            </menuItem>
                             <menuItem title="AI Terminal Manager…" id="QwL-Z6-I6A">
                                 <modifierMask key="keyEquivalentModifierMask"/>
                                 <connections>
