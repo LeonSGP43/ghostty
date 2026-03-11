@@ -145,6 +145,10 @@ class AppDelegate: NSObject,
         store: aiTerminalManagerStore
     )
 
+    @MainActor lazy var sshConnectionsController = SSHConnectionsController(
+        store: aiTerminalManagerStore
+    )
+
     @MainActor lazy var settingsController = SettingsController(appDelegate: self)
 
     /// The elapsed time since the process was started

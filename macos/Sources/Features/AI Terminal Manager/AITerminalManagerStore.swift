@@ -116,6 +116,11 @@ final class AITerminalManagerStore: ObservableObject {
             .first
     }
 
+    func hasStoredPassword(for host: AITerminalHost) -> Bool {
+        guard host.authMode == .password else { return false }
+        return (try? credentialStore.password(for: host.id))?.isEmpty == false
+    }
+
     var workspaces: [AITerminalWorkspaceTemplate] {
         configuration.workspaces.sorted {
             $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
@@ -313,12 +318,13 @@ final class AITerminalManagerStore: ObservableObject {
             }
 
         case .password:
-            guard let trimmedPassword, !trimmedPassword.isEmpty else {
-                lastError = L10n.SSHConnections.passwordRequired
-                return
-            }
             do {
-                try credentialStore.setPassword(trimmedPassword, for: hostID)
+                if let trimmedPassword, !trimmedPassword.isEmpty {
+                    try credentialStore.setPassword(trimmedPassword, for: hostID)
+                } else if try credentialStore.password(for: hostID) == nil {
+                    lastError = L10n.SSHConnections.passwordRequired
+                    return
+                }
             } catch {
                 lastError = L10n.SSHConnections.passwordSaveFailed(error.localizedDescription)
                 return

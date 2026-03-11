@@ -62,6 +62,13 @@ enum AITerminalHostAuthMode: String, Codable, CaseIterable, Identifiable, Sendab
     case password
 
     var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .system: L10n.SSHConnections.authModeSystem
+        case .password: L10n.SSHConnections.authModePassword
+        }
+    }
 }
 
 struct AITerminalHost: Identifiable, Codable, Hashable, Sendable {
