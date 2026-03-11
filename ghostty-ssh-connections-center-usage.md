@@ -18,7 +18,7 @@
 1. Open `Connections`.
 2. Click `New Connection`.
 3. Fill in:
-   - `Display Name`
+   - optional `Display Name`
    - `SSH Alias` or `Hostname`
    - optional `User`
    - optional `Port`
@@ -27,6 +27,14 @@
    - `System SSH`: use your system ssh / ssh-agent flow.
    - `Saved Password`: store the password in macOS Keychain and auto-fill it on the next connection.
 5. Click `Save Connection`.
+
+## Updated interaction model
+
+- 左侧是更简化的连接侧边栏，只负责搜索、筛选和选择连接。
+- 右侧只展示当前连接的详情、主操作和该连接对应的活动会话。
+- `New Connection` / `Edit` / `Duplicate` 现在通过独立弹窗编辑，不再把大表单常驻在主界面里。
+- 如果 `Display Name` 留空，Ghostty 会优先使用 `SSH Alias`，否则回退为 `user@hostname` 作为连接名。
+- 在侧边栏中双击某个连接，会直接发起连接。
 
 ## Connect quickly
 

@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import SwiftUI
 
@@ -12,42 +13,53 @@ struct SSHConnectionsView: View {
     @State private var hostPassword = ""
     @State private var hostAuthMode: AITerminalHostAuthMode = .system
     @State private var editingHostID: String?
+    @State private var isPresentingEditor = false
     @State private var selectedHostID: String?
     @State private var hostSearchText = ""
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(spacing: 0) {
             header
 
             if let lastError = store.lastError, !lastError.isEmpty {
                 Text(lastError)
-                    .foregroundStyle(.red)
                     .font(.callout)
+                    .foregroundStyle(.red)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 8)
             }
 
-            HStack(alignment: .top, spacing: 16) {
+            NavigationSplitView {
                 sidebar
-                    .frame(width: 340, alignment: .topLeading)
-                detailsAndEditor
-                    .frame(minWidth: 420, maxWidth: .infinity, alignment: .topLeading)
-                activeSessions
-                    .frame(width: 340, alignment: .topLeading)
+            } detail: {
+                detailPane
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .navigationSplitViewStyle(.balanced)
         }
-        .padding(20)
-        .frame(minWidth: 1280, minHeight: 760, alignment: .topLeading)
+        .frame(minWidth: 1180, minHeight: 760)
+        .background(Color(nsColor: .windowBackgroundColor))
+        .sheet(isPresented: $isPresentingEditor) {
+            hostEditorSheet
+        }
+        .onAppear(perform: syncSelection)
+        .onChange(of: allSSHHosts.map(\.id)) { _ in
+            syncSelection()
+        }
     }
 
     private var header: some View {
-        HStack(alignment: .top) {
-            VStack(alignment: .leading, spacing: 6) {
+        HStack(alignment: .top, spacing: 16) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(L10n.SSHConnections.title)
-                    .font(.largeTitle.weight(.semibold))
+                    .font(.title2.weight(.semibold))
                 Text(L10n.SSHConnections.subtitle)
+                    .font(.callout)
                     .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            Spacer()
+
+            Spacer(minLength: 12)
 
             Picker(L10n.AITerminalManager.launch, selection: $store.launchTarget) {
                 ForEach(AITerminalLaunchTarget.allCases) { target in
@@ -57,153 +69,289 @@ struct SSHConnectionsView: View {
             .pickerStyle(.segmented)
             .frame(width: 220)
         }
+        .padding(20)
+        .background(Color(nsColor: .windowBackgroundColor))
     }
 
     private var sidebar: some View {
-        GroupBox {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                Button(L10n.SSHConnections.newConnection) {
+                    prepareNewConnection()
+                }
+                Button(L10n.AITerminalManager.reloadSSHConfig) {
+                    store.reloadImportedSSHHosts()
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.top, 12)
+
+            TextField(L10n.AITerminalManager.searchHosts, text: $hostSearchText)
+                .textFieldStyle(.roundedBorder)
+                .padding(.horizontal, 12)
+
+            List(selection: $selectedHostID) {
+                if filteredRecentHosts.isEmpty && filteredSavedHosts.isEmpty && filteredImportedHosts.isEmpty {
+                    Text(L10n.AITerminalManager.hostsEmpty)
+                        .foregroundStyle(.secondary)
+                } else {
+                    hostSection(title: L10n.AITerminalManager.recentHosts, hosts: filteredRecentHosts)
+                    hostSection(title: L10n.AITerminalManager.savedHosts, hosts: filteredSavedHosts)
+                    hostSection(title: L10n.AITerminalManager.importedHosts, hosts: filteredImportedHosts)
+                }
+            }
+            .listStyle(.sidebar)
+        }
+    }
+
+    @ViewBuilder
+    private func hostSection(title: String, hosts: [AITerminalHost]) -> some View {
+        if !hosts.isEmpty {
+            Section(title) {
+                ForEach(hosts) { host in
+                    hostListRow(host)
+                        .tag(host.id)
+                }
+            }
+        }
+    }
+
+    private func hostListRow(_ host: AITerminalHost) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(host.name)
+                    .font(.headline)
+                    .lineLimit(1)
+
+                Spacer(minLength: 8)
+
+                if hasActiveSession(for: host) {
+                    Image(systemName: "wave.3.right.circle.fill")
+                        .foregroundStyle(Color.accentColor)
+                }
+            }
+
+            Text(primarySubtitle(for: host))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+
+            HStack(spacing: 6) {
+                badge(hostSourceLabel(for: host))
+
+                if host.authMode == .password {
+                    badge(host.authMode.displayName)
+                }
+
+                if let recentRecord = store.recentRecord(for: host) {
+                    badge(recentStatusTitle(for: recentRecord))
+                }
+            }
+        }
+        .padding(.vertical, 4)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            selectedHostID = host.id
+        }
+        .onTapGesture(count: 2) {
+            store.open(host: host)
+        }
+    }
+
+    @ViewBuilder
+    private var detailPane: some View {
+        if let selectedHost {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    heroCard(for: selectedHost)
+                    detailCard(for: selectedHost)
+                    sessionsCard(for: selectedHost)
+                }
+                .padding(24)
+                .frame(maxWidth: .infinity, alignment: .topLeading)
+            }
+        } else {
+            VStack(alignment: .leading, spacing: 14) {
+                Text(L10n.SSHConnections.title)
+                    .font(.title2.weight(.semibold))
+                Text(allSSHHosts.isEmpty ? L10n.AITerminalManager.hostsEmpty : L10n.AITerminalManager.noHostSelected)
+                    .foregroundStyle(.secondary)
+
+                HStack(spacing: 10) {
                     Button(L10n.SSHConnections.newConnection) {
-                        resetEditor()
+                        prepareNewConnection()
                     }
                     Button(L10n.AITerminalManager.reloadSSHConfig) {
                         store.reloadImportedSSHHosts()
                     }
                 }
-
-                TextField(L10n.AITerminalManager.searchHosts, text: $hostSearchText)
-                    .textFieldStyle(.roundedBorder)
-
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 12) {
-                        if filteredRecentHosts.isEmpty && filteredSavedHosts.isEmpty && filteredImportedHosts.isEmpty {
-                            Text(L10n.AITerminalManager.hostsEmpty)
-                                .foregroundStyle(.secondary)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                        } else {
-                            hostGroup(title: L10n.AITerminalManager.recentHosts, hosts: filteredRecentHosts)
-                            hostGroup(title: L10n.AITerminalManager.savedHosts, hosts: filteredSavedHosts)
-                            hostGroup(title: L10n.AITerminalManager.importedHosts, hosts: filteredImportedHosts)
-                        }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .topLeading)
-                }
             }
-            .frame(maxHeight: .infinity, alignment: .topLeading)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+            .padding(32)
         }
     }
 
-    @ViewBuilder
-    private func hostGroup(title: String, hosts: [AITerminalHost]) -> some View {
-        if !hosts.isEmpty {
-            VStack(alignment: .leading, spacing: 8) {
-                Text(title)
-                    .font(.headline)
-                ForEach(hosts) { host in
-                    hostRow(host)
-                }
-            }
-        }
-    }
-
-    private func hostRow(_ host: AITerminalHost) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 4) {
+    private func heroCard(for host: AITerminalHost) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(alignment: .top, spacing: 16) {
+                VStack(alignment: .leading, spacing: 6) {
                     Text(host.name)
-                        .font(.headline)
-                    Text(host.displaySubtitle)
-                        .font(.caption)
+                        .font(.title2.weight(.semibold))
+
+                    Text(primarySubtitle(for: host))
+                        .font(.callout)
                         .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                    HStack(spacing: 6) {
+                        .textSelection(.enabled)
+
+                    HStack(spacing: 8) {
                         badge(hostSourceLabel(for: host))
                         badge(host.authMode.displayName)
+                        if hasActiveSession(for: host) {
+                            badge(L10n.SSHConnections.activeSessions)
+                        }
                     }
                 }
-                Spacer()
+
+                Spacer(minLength: 12)
+
                 Button(L10n.AITerminalManager.connect) {
                     store.open(host: host)
                 }
+                .controlSize(.large)
             }
 
             if let recentRecord = store.recentRecord(for: host) {
                 Text(recentSummary(for: recentRecord))
-                    .font(.caption2)
+                    .font(.callout)
                     .foregroundStyle(recentRecord.status == .failed ? .red : .secondary)
             }
-        }
-        .padding(10)
-        .background(hostRowBackground(for: host), in: RoundedRectangle(cornerRadius: 10))
-        .contentShape(Rectangle())
-        .onTapGesture {
-            selectedHostID = host.id
-        }
-    }
 
-    private var detailsAndEditor: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            GroupBox(L10n.AITerminalManager.hostDetails) {
-                VStack(alignment: .leading, spacing: 10) {
-                    if let selectedHost {
-                        detailLine(label: L10n.AITerminalManager.displayName, value: selectedHost.name)
-                        detailLine(label: L10n.AITerminalManager.hostSource, value: hostSourceLabel(for: selectedHost))
-                        detailLine(label: L10n.AITerminalManager.hostTarget, value: selectedHost.connectionTarget ?? "—")
-                        detailLine(label: L10n.AITerminalManager.hostname, value: selectedHost.hostname ?? "—")
-                        detailLine(label: L10n.AITerminalManager.user, value: selectedHost.user ?? "—")
-                        detailLine(label: L10n.AITerminalManager.port, value: selectedHost.port.map(String.init) ?? "—")
-                        detailLine(label: L10n.AITerminalManager.defaultDirectory, value: selectedHost.defaultDirectory ?? "—")
-                        detailLine(label: L10n.SSHConnections.authentication, value: selectedHost.authMode.displayName)
-
-                        if selectedHost.authMode == .password {
-                            Text(store.hasStoredPassword(for: selectedHost) ? L10n.SSHConnections.passwordStored : L10n.SSHConnections.passwordNotStored)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-
-                        HStack {
-                            Button(L10n.AITerminalManager.connect) {
-                                store.open(host: selectedHost)
-                            }
-                            Button(L10n.AITerminalManager.edit) {
-                                beginEditing(selectedHost)
-                            }
-                            Button(L10n.AITerminalManager.duplicateHost) {
-                                beginDuplicating(selectedHost)
-                            }
-                            if store.isUserManagedHost(selectedHost) {
-                                Button(L10n.AITerminalManager.remove) {
-                                    store.removeHost(selectedHost)
-                                    if editingHostID == selectedHost.id {
-                                        resetEditor()
-                                    }
-                                }
-                            } else if store.isImportedHostOverridden(selectedHost) {
-                                Button(L10n.AITerminalManager.resetOverride) {
-                                    store.resetImportedHostOverride(selectedHost)
-                                    if editingHostID == selectedHost.id {
-                                        resetEditor()
-                                    }
-                                }
-                            }
-                        }
-                    } else {
-                        Text(L10n.AITerminalManager.noHostSelected)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
+            if host.authMode == .password {
+                Text(store.hasStoredPassword(for: host) ? L10n.SSHConnections.passwordStored : L10n.SSHConnections.passwordNotStored)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
-            GroupBox(editingHostID == nil ? L10n.SSHConnections.newConnection : L10n.AITerminalManager.editSSHHost) {
-                VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                Button(L10n.AITerminalManager.edit) {
+                    beginEditing(host)
+                }
+                Button(L10n.AITerminalManager.duplicateHost) {
+                    beginDuplicating(host)
+                }
+
+                if store.isUserManagedHost(host) {
+                    Button(L10n.AITerminalManager.remove, role: .destructive) {
+                        store.removeHost(host)
+                    }
+                } else if store.isImportedHostOverridden(host) {
+                    Button(L10n.AITerminalManager.resetOverride, role: .destructive) {
+                        store.resetImportedHostOverride(host)
+                    }
+                }
+            }
+        }
+        .padding(20)
+        .background(cardBackground, in: RoundedRectangle(cornerRadius: 16))
+    }
+
+    private func detailCard(for host: AITerminalHost) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text(L10n.AITerminalManager.hostDetails)
+                .font(.headline)
+
+            LazyVGrid(
+                columns: [
+                    GridItem(.flexible(minimum: 180), spacing: 16, alignment: .topLeading),
+                    GridItem(.flexible(minimum: 180), spacing: 16, alignment: .topLeading),
+                ],
+                alignment: .leading,
+                spacing: 14
+            ) {
+                infoCell(label: L10n.AITerminalManager.displayName, value: host.name)
+                infoCell(label: L10n.AITerminalManager.hostTarget, value: host.connectionTarget ?? "—")
+                infoCell(label: L10n.AITerminalManager.hostname, value: host.hostname ?? "—")
+                infoCell(label: L10n.AITerminalManager.user, value: host.user ?? "—")
+                infoCell(label: L10n.AITerminalManager.port, value: host.port.map(String.init) ?? "—")
+                infoCell(label: L10n.AITerminalManager.defaultDirectory, value: host.defaultDirectory ?? "—")
+                infoCell(label: L10n.SSHConnections.authentication, value: host.authMode.displayName)
+                infoCell(label: L10n.AITerminalManager.hostSource, value: hostSourceLabel(for: host))
+            }
+        }
+        .padding(20)
+        .background(cardBackground, in: RoundedRectangle(cornerRadius: 16))
+    }
+
+    private func sessionsCard(for host: AITerminalHost) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text(L10n.SSHConnections.activeSessions)
+                .font(.headline)
+
+            if contextualRemoteSessions(for: host).isEmpty {
+                Text(L10n.SSHConnections.activeSessionsEmpty)
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(contextualRemoteSessions(for: host)) { session in
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack(alignment: .top, spacing: 8) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(session.title)
+                                    .font(.headline)
+                                Text(session.hostTarget)
+                                    .font(.callout)
+                                    .foregroundStyle(.secondary)
+                                    .textSelection(.enabled)
+                            }
+
+                            Spacer(minLength: 8)
+
+                            if session.isFocused {
+                                badge(L10n.AITerminalManager.focused)
+                            }
+                        }
+
+                        if let workingDirectory = session.workingDirectory, !workingDirectory.isEmpty {
+                            Text(workingDirectory)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .textSelection(.enabled)
+                        }
+
+                        Text(session.authState.displayName)
+                            .font(.caption)
+                            .foregroundStyle(authStateColor(session.authState))
+
+                        HStack(spacing: 10) {
+                            Button(L10n.AITerminalManager.focus) {
+                                store.focus(sessionID: session.id)
+                            }
+                            Button(L10n.SSHConnections.reconnect) {
+                                reconnect(session: session)
+                            }
+                        }
+                    }
+                    .padding(14)
+                    .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
+                }
+            }
+        }
+        .padding(20)
+        .background(cardBackground, in: RoundedRectangle(cornerRadius: 16))
+    }
+
+    private var hostEditorSheet: some View {
+        NavigationStack {
+            Form {
+                Section {
                     TextField(L10n.AITerminalManager.displayName, text: $hostName)
                     TextField(L10n.AITerminalManager.sshAlias, text: $hostAlias)
                     TextField(L10n.AITerminalManager.hostname, text: $hostHostname)
                     TextField(L10n.AITerminalManager.user, text: $hostUser)
                     TextField(L10n.AITerminalManager.port, text: $hostPort)
                     TextField(L10n.AITerminalManager.defaultDirectory, text: $hostDefaultDirectory)
+                }
 
+                Section(L10n.SSHConnections.authentication) {
                     Picker(L10n.SSHConnections.authentication, selection: $hostAuthMode) {
                         ForEach(AITerminalHostAuthMode.allCases) { authMode in
                             Text(authMode.displayName).tag(authMode)
@@ -216,98 +364,29 @@ struct SSHConnectionsView: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
-
-                    HStack {
-                        Button(editingHostID == nil ? L10n.SSHConnections.saveConnection : L10n.SSHConnections.updateConnection) {
-                            store.saveHost(
-                                existingHostID: editingHostID,
-                                name: hostName,
-                                sshAlias: hostAlias,
-                                hostname: hostHostname,
-                                user: hostUser,
-                                port: hostPort,
-                                defaultDirectory: hostDefaultDirectory,
-                                authMode: hostAuthMode,
-                                password: hostPassword
-                            )
-                            if store.lastError == nil {
-                                hostPassword = ""
-                                resetEditor()
-                            }
-                        }
-
-                        if editingHostID != nil {
-                            Button(L10n.AITerminalManager.cancelEdit) {
-                                resetEditor()
-                            }
-                        }
+                }
+            }
+            .formStyle(.grouped)
+            .navigationTitle(editingHostID == nil ? L10n.SSHConnections.newConnection : L10n.AITerminalManager.editSSHHost)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(L10n.AITerminalManager.cancelEdit) {
+                        cancelEditor()
                     }
                 }
-                .textFieldStyle(.roundedBorder)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-        }
-    }
 
-    private var activeSessions: some View {
-        GroupBox(L10n.SSHConnections.activeSessions) {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 10) {
-                    if store.remoteSessions.isEmpty {
-                        Text(L10n.SSHConnections.activeSessionsEmpty)
-                            .foregroundStyle(.secondary)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    } else {
-                        ForEach(store.remoteSessions) { session in
-                            VStack(alignment: .leading, spacing: 8) {
-                                HStack(alignment: .top) {
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text(session.title)
-                                            .font(.headline)
-                                        Text(session.hostName)
-                                            .font(.callout)
-                                        Text(session.hostTarget)
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
-                                    }
-                                    Spacer()
-                                    if session.isFocused {
-                                        badge(L10n.AITerminalManager.focused)
-                                    }
-                                }
-
-                                if let workingDirectory = session.workingDirectory, !workingDirectory.isEmpty {
-                                    Text(workingDirectory)
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                        .textSelection(.enabled)
-                                }
-
-                                Text(session.authState.displayName)
-                                    .font(.caption)
-                                    .foregroundStyle(authStateColor(session.authState))
-
-                                HStack {
-                                    Button(L10n.AITerminalManager.focus) {
-                                        store.focus(sessionID: session.id)
-                                    }
-                                    Button(L10n.SSHConnections.reconnect) {
-                                        reconnect(session: session)
-                                    }
-                                }
-                            }
-                            .padding(10)
-                            .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
-                        }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(editingHostID == nil ? L10n.SSHConnections.saveConnection : L10n.SSHConnections.updateConnection) {
+                        persistEditor()
                     }
                 }
-                .frame(maxWidth: .infinity, alignment: .topLeading)
             }
         }
+        .frame(minWidth: 540, minHeight: 420)
     }
 
-    private func detailLine(label: String, value: String) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
+    private func infoCell(label: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
             Text(label)
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -315,6 +394,7 @@ struct SSHConnectionsView: View {
                 .font(.callout)
                 .textSelection(.enabled)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func badge(_ title: String) -> some View {
@@ -322,7 +402,11 @@ struct SSHConnectionsView: View {
             .font(.caption2.weight(.medium))
             .padding(.horizontal, 8)
             .padding(.vertical, 3)
-            .background(Color.secondary.opacity(0.14), in: Capsule())
+            .background(Color.secondary.opacity(0.12), in: Capsule())
+    }
+
+    private var cardBackground: Color {
+        Color(nsColor: .controlBackgroundColor)
     }
 
     private func authStateColor(_ authState: AITerminalSSHSessionAuthState) -> Color {
@@ -344,6 +428,7 @@ struct SSHConnectionsView: View {
         hostDefaultDirectory = host.defaultDirectory ?? ""
         hostAuthMode = host.authMode
         hostPassword = ""
+        isPresentingEditor = true
     }
 
     private func beginDuplicating(_ host: AITerminalHost) {
@@ -360,9 +445,10 @@ struct SSHConnectionsView: View {
         hostDefaultDirectory = host.defaultDirectory ?? ""
         hostAuthMode = host.authMode
         hostPassword = ""
+        isPresentingEditor = true
     }
 
-    private func resetEditor() {
+    private func prepareNewConnection() {
         editingHostID = nil
         hostName = ""
         hostAlias = ""
@@ -372,11 +458,53 @@ struct SSHConnectionsView: View {
         hostDefaultDirectory = ""
         hostAuthMode = .system
         hostPassword = ""
+        isPresentingEditor = true
+    }
+
+    private func cancelEditor() {
+        isPresentingEditor = false
+        hostPassword = ""
+        editingHostID = nil
+    }
+
+    private func persistEditor() {
+        let draftHostID = AITerminalHost.stableID(
+            existingID: editingHostID,
+            sshAlias: hostAlias,
+            hostname: hostHostname,
+            user: hostUser
+        )
+
+        store.saveHost(
+            existingHostID: editingHostID,
+            name: hostName,
+            sshAlias: hostAlias,
+            hostname: hostHostname,
+            user: hostUser,
+            port: hostPort,
+            defaultDirectory: hostDefaultDirectory,
+            authMode: hostAuthMode,
+            password: hostPassword
+        )
+
+        guard store.lastError == nil else { return }
+        selectedHostID = draftHostID
+        cancelEditor()
     }
 
     private func reconnect(session: AITerminalRemoteSessionSummary) {
         guard let host = store.availableHosts.first(where: { $0.id == session.hostID }) else { return }
         store.open(host: host)
+    }
+
+    private func syncSelection() {
+        let ids = Set(allSSHHosts.map(\.id))
+
+        if let selectedHostID, ids.contains(selectedHostID) {
+            return
+        }
+
+        selectedHostID = allSSHHosts.first?.id
     }
 
     private var filteredRecentHosts: [AITerminalHost] {
@@ -398,11 +526,8 @@ struct SSHConnectionsView: View {
     }
 
     private var selectedHost: AITerminalHost? {
-        if let selectedHostID,
-           let selectedHost = allSSHHosts.first(where: { $0.id == selectedHostID }) {
-            return selectedHost
-        }
-        return filteredRecentHosts.first ?? filteredSavedHosts.first ?? filteredImportedHosts.first
+        guard let selectedHostID else { return nil }
+        return allSSHHosts.first(where: { $0.id == selectedHostID })
     }
 
     private var passwordHelperText: String {
@@ -444,20 +569,32 @@ struct SSHConnectionsView: View {
         return ""
     }
 
-    private func hostRowBackground(for host: AITerminalHost) -> Color {
-        selectedHost?.id == host.id ? .accentColor.opacity(0.12) : .clear
-    }
-
     private func recentSummary(for record: AITerminalRecentHostRecord) -> String {
-        let status = switch record.status {
-        case .connected: L10n.AITerminalManager.hostStatusConnected
-        case .failed: L10n.AITerminalManager.hostStatusFailed
-        }
+        let status = recentStatusTitle(for: record)
         let timestamp = record.connectedAt.formatted(date: .abbreviated, time: .shortened)
         if let errorSummary = record.errorSummary, !errorSummary.isEmpty {
             return "\(status) • \(timestamp) • \(errorSummary)"
         }
         return "\(status) • \(timestamp)"
+    }
+
+    private func recentStatusTitle(for record: AITerminalRecentHostRecord) -> String {
+        switch record.status {
+        case .connected: L10n.AITerminalManager.hostStatusConnected
+        case .failed: L10n.AITerminalManager.hostStatusFailed
+        }
+    }
+
+    private func primarySubtitle(for host: AITerminalHost) -> String {
+        host.connectionTarget ?? host.displaySubtitle
+    }
+
+    private func contextualRemoteSessions(for host: AITerminalHost) -> [AITerminalRemoteSessionSummary] {
+        store.remoteSessions.filter { $0.hostID == host.id }
+    }
+
+    private func hasActiveSession(for host: AITerminalHost) -> Bool {
+        store.remoteSessions.contains { $0.hostID == host.id }
     }
 }
 

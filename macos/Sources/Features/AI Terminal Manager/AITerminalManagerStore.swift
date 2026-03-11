@@ -270,14 +270,17 @@ final class AITerminalManagerStore: ObservableObject {
         let trimmedDirectory = defaultDirectory.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedPassword = password?.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        guard !trimmedName.isEmpty else {
-            lastError = L10n.AITerminalManager.hostNameEmpty
-            return
-        }
         guard !trimmedAlias.isEmpty || !trimmedHostname.isEmpty else {
             lastError = L10n.AITerminalManager.hostMissingAliasOrHostname
             return
         }
+
+        let resolvedName = Self.resolvedHostName(
+            explicitName: trimmedName,
+            sshAlias: trimmedAlias,
+            hostname: trimmedHostname,
+            user: trimmedUser
+        )
 
         let parsedPort: Int?
         if port.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -297,7 +300,7 @@ final class AITerminalManagerStore: ObservableObject {
         )
         let host = AITerminalHost(
             id: hostID,
-            name: trimmedName,
+            name: resolvedName,
             transport: .ssh,
             sshAlias: trimmedAlias.isEmpty ? nil : trimmedAlias,
             hostname: trimmedHostname.isEmpty ? nil : trimmedHostname,
@@ -347,6 +350,31 @@ final class AITerminalManagerStore: ObservableObject {
         lastError = nil
         persistConfiguration()
         rebuildSessions()
+    }
+
+    nonisolated static func resolvedHostName(
+        explicitName: String,
+        sshAlias: String,
+        hostname: String,
+        user: String
+    ) -> String {
+        let trimmedName = explicitName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedName.isEmpty {
+            return trimmedName
+        }
+
+        let trimmedAlias = sshAlias.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedAlias.isEmpty {
+            return trimmedAlias
+        }
+
+        let trimmedHostname = hostname.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedUser = user.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedHostname.isEmpty {
+            return trimmedUser.isEmpty ? trimmedHostname : "\(trimmedUser)@\(trimmedHostname)"
+        }
+
+        return ""
     }
 
     func removeHost(_ host: AITerminalHost) {
