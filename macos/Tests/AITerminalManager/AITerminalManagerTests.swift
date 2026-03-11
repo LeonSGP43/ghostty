@@ -170,6 +170,66 @@ struct AITerminalManagerTests {
         )
     }
 
+    @Test func sshConnectionsSidebarGroupsDoNotDuplicateHosts() {
+        let recent = [
+            AITerminalHost(
+                id: "ssh:recent",
+                name: "Recent",
+                transport: .ssh,
+                sshAlias: "recent",
+                hostname: "10.0.0.1",
+                user: "leon",
+                port: 22,
+                defaultDirectory: nil,
+                source: .configurationFile
+            ),
+        ]
+        let saved = [
+            recent[0],
+            AITerminalHost(
+                id: "ssh:saved",
+                name: "Saved",
+                transport: .ssh,
+                sshAlias: "saved",
+                hostname: "10.0.0.2",
+                user: "leon",
+                port: 22,
+                defaultDirectory: nil,
+                source: .configurationFile
+            ),
+        ]
+        let imported = [
+            recent[0],
+            saved[1],
+            AITerminalHost(
+                id: "ssh:imported",
+                name: "Imported",
+                transport: .ssh,
+                sshAlias: "imported",
+                hostname: "10.0.0.3",
+                user: "leon",
+                port: 22,
+                defaultDirectory: nil,
+                source: .sshConfig
+            ),
+        ]
+
+        let displayRecent = SSHConnectionsView.deduplicatedRecentHosts(recent)
+        let displaySaved = SSHConnectionsView.sidebarSavedHosts(
+            savedHosts: saved,
+            recentHosts: displayRecent
+        )
+        let displayImported = SSHConnectionsView.sidebarImportedHosts(
+            importedHosts: imported,
+            savedHosts: saved,
+            recentHosts: displayRecent
+        )
+
+        #expect(displayRecent.map(\.id) == ["ssh:recent"])
+        #expect(displaySaved.map(\.id) == ["ssh:saved"])
+        #expect(displayImported.map(\.id) == ["ssh:imported"])
+    }
+
     @Test @MainActor func storeSavesHostWithoutExplicitName() {
         let tempURL = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString)
