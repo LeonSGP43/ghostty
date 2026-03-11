@@ -149,6 +149,10 @@ class AppDelegate: NSObject,
         store: aiTerminalManagerStore
     )
 
+    @MainActor lazy var newTabPickerController = NewTabPickerController(
+        store: aiTerminalManagerStore
+    )
+
     @MainActor lazy var settingsController = SettingsController(appDelegate: self)
 
     /// The elapsed time since the process was started
@@ -1133,10 +1137,17 @@ class AppDelegate: NSObject,
     }
 
     @IBAction func newTab(_ sender: Any?) {
-        _ = TerminalController.newTab(
-            ghostty,
-            from: TerminalController.preferredParent?.window
-        )
+        showNewTabPicker(from: TerminalController.preferredParent?.window ?? NSApp.keyWindow)
+    }
+
+    @MainActor
+    func showNewTabPicker(from window: NSWindow?) {
+        if let window {
+            newTabPickerController.show(relativeTo: window)
+            return
+        }
+
+        aiTerminalManagerStore.openLocalShell(launchTarget: .window)
     }
 
     @IBAction func closeAllWindows(_ sender: Any?) {

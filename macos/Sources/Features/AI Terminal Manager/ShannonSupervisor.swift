@@ -5,6 +5,7 @@ enum ShannonSupervisorState: Equatable {
     case unavailable
     case stopped
     case starting
+    case runningEmbedded
     case running(pid: Int32)
     case failed(message: String)
 
@@ -13,6 +14,7 @@ enum ShannonSupervisorState: Equatable {
         case .unavailable: L10n.AITerminalManager.supervisorUnavailable
         case .stopped: L10n.AITerminalManager.supervisorStopped
         case .starting: L10n.AITerminalManager.supervisorStarting
+        case .runningEmbedded: L10n.AITerminalManager.supervisorRunningEmbedded
         case .running(let pid): L10n.AITerminalManager.supervisorRunning(pid: pid)
         case .failed(let message): L10n.AITerminalManager.supervisorFailed(message)
         }
@@ -29,9 +31,21 @@ final class ShannonSupervisor {
     private(set) var state: ShannonSupervisorState = .unavailable
     private var process: Process?
 
+    var isRunning: Bool {
+        if process != nil {
+            return true
+        }
+        switch state {
+        case .running, .runningEmbedded:
+            return true
+        default:
+            return false
+        }
+    }
+
     func updateAvailability(for configuration: ShannonSupervisorConfiguration) {
         guard process == nil else { return }
-        if configuration.binaryPath?.isEmpty == false {
+        if configuration.isLaunchable {
             state = .stopped
         } else {
             state = .unavailable
@@ -40,14 +54,24 @@ final class ShannonSupervisor {
 
     func start(configuration: ShannonSupervisorConfiguration) {
         guard process == nil else { return }
-        guard let binaryPath = configuration.binaryPath, !binaryPath.isEmpty else {
+        guard configuration.isLaunchable else {
+            state = .unavailable
+            return
+        }
+
+        if configuration.isEmbeddedRuntime {
+            state = .runningEmbedded
+            return
+        }
+
+        guard let binaryPath = configuration.binaryPath else {
             state = .unavailable
             return
         }
 
         let process = Process()
         process.executableURL = URL(fileURLWithPath: binaryPath)
-        process.arguments = configuration.arguments
+        process.arguments = configuration.resolvedArguments
         process.environment = ProcessInfo.processInfo.environment.merging(configuration.environment, uniquingKeysWith: { _, new in new })
 
         process.terminationHandler = { [weak self] process in
@@ -76,6 +100,11 @@ final class ShannonSupervisor {
     }
 
     func stop() {
+        if case .runningEmbedded = state {
+            state = .stopped
+            return
+        }
+
         guard let process else { return }
         process.terminate()
         self.process = nil

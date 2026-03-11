@@ -16,6 +16,7 @@ struct AITerminalManagerView: View {
     @State private var selectedWorkspaceHostID = AITerminalHost.local.id
     @State private var sessionCommand = ""
     @State private var sessionInput = ""
+    @State private var shannonPrompt = ""
 
     var body: some View {
         ScrollView([.horizontal, .vertical]) {
@@ -89,6 +90,33 @@ struct AITerminalManagerView: View {
                 Text(L10n.AITerminalManager.supervisorHint)
                     .font(.callout)
                     .foregroundStyle(.secondary)
+
+                Divider()
+
+                detailLine(
+                    label: L10n.AITerminalManager.runtimeEndpoint,
+                    value: store.runtimeStatus.baseURL ?? "—"
+                )
+                detailLine(
+                    label: L10n.AITerminalManager.runtimeHealth,
+                    value: store.runtimeStatus.health.displayName
+                )
+                detailLine(
+                    label: L10n.AITerminalManager.runtimeVersion,
+                    value: store.runtimeStatus.version ?? "—"
+                )
+                detailLine(
+                    label: L10n.AITerminalManager.runtimeGateway,
+                    value: store.runtimeStatus.gatewayDisplayName
+                )
+                detailLine(
+                    label: L10n.AITerminalManager.runtimeActiveAgent,
+                    value: store.runtimeStatus.activeAgent ?? "—"
+                )
+                detailLine(
+                    label: L10n.AITerminalManager.runtimeUptime,
+                    value: store.runtimeStatus.uptimeDisplayName
+                )
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -658,6 +686,73 @@ struct AITerminalManagerView: View {
                                 .textSelection(.enabled)
                         }
                         .frame(minHeight: 120, maxHeight: 180)
+                        .padding(8)
+                        .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 8))
+                    }
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(L10n.AITerminalManager.shannonPrompt)
+                            .font(.headline)
+                        TextEditor(text: $shannonPrompt)
+                            .font(.system(.body, design: .monospaced))
+                            .frame(minHeight: 72, maxHeight: 120)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(Color(nsColor: .separatorColor), lineWidth: 1)
+                            )
+
+                        HStack {
+                            Button(L10n.AITerminalManager.askShannon) {
+                                store.askShannon(shannonPrompt, for: session.id)
+                                if store.lastError == nil {
+                                    shannonPrompt = ""
+                                }
+                            }
+                            .disabled(!store.runtimeStatus.healthIsUsable)
+
+                            Spacer()
+
+                            Text(store.shannonStatusText)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        if let approval = store.pendingShannonApproval {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text(L10n.AITerminalManager.shannonApprovalCard)
+                                    .font(.headline)
+                                Text(approval.tool)
+                                    .font(.callout.weight(.semibold))
+                                Text(approval.args)
+                                    .font(.system(.caption, design: .monospaced))
+                                    .textSelection(.enabled)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(8)
+                                    .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 8))
+
+                                HStack {
+                                    Button(L10n.AITerminalManager.approveAction) {
+                                        store.respondToShannonApproval(approved: true)
+                                    }
+                                    Button(L10n.AITerminalManager.denyAction) {
+                                        store.respondToShannonApproval(approved: false)
+                                    }
+                                    Spacer()
+                                }
+                            }
+                            .padding(10)
+                            .background(.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
+                        }
+
+                        Text(L10n.AITerminalManager.shannonResponse)
+                            .font(.headline)
+                        ScrollView {
+                            Text(store.shannonResponse.isEmpty ? L10n.AITerminalManager.shannonResponseEmpty : store.shannonResponse)
+                                .font(.system(.caption, design: .monospaced))
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .textSelection(.enabled)
+                        }
+                        .frame(minHeight: 120, maxHeight: 200)
                         .padding(8)
                         .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 8))
                     }

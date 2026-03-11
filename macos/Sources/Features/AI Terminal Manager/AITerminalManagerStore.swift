@@ -16,9 +16,14 @@ final class AITerminalManagerStore: ObservableObject {
     @Published private(set) var sessions: [AITerminalSessionSummary] = []
     @Published private(set) var tasks: [AITerminalTaskRecord] = []
     @Published private(set) var supervisorState: ShannonSupervisorState = .unavailable
+    @Published private(set) var runtimeStatus: ShannonRuntimeStatus = .unavailable
     @Published private(set) var selectedSessionID: UUID?
     @Published private(set) var selectedSessionVisibleText = ""
     @Published private(set) var selectedSessionScreenText = ""
+    @Published private(set) var shannonRunState: ShannonRunState = .idle
+    @Published private(set) var shannonResponse = ""
+    @Published private(set) var shannonLastToolEvent: String?
+    @Published private(set) var pendingShannonApproval: ShannonPendingApproval?
     @Published var launchTarget: AITerminalLaunchTarget = .tab
     @Published var lastError: String?
 
@@ -27,11 +32,15 @@ final class AITerminalManagerStore: ObservableObject {
     private let sshConfigHostLoader: () -> [AITerminalHost]
     private let credentialStore: SSHConnectionCredentialStore
     private let supervisor = ShannonSupervisor()
+    private let bridgeClient = ShannonBridgeClient()
     private var registrations: [UUID: AITerminalLaunchRegistration] = [:]
     private var sshSessionAuthStates: [UUID: AITerminalSSHSessionAuthState] = [:]
     private var pendingSSHPasswordAutomations: [UUID: PendingSSHPasswordAutomation] = [:]
     private var taskBindings: [UUID: UUID] = [:]
     private var pollingTimer: Timer?
+    private var runtimeRefreshTask: Task<Void, Never>?
+    private var shannonRunTask: Task<Void, Never>?
+    private var lastRuntimeRefreshAt: Date = .distantPast
 
     init(
         appDelegateProvider: @escaping () -> AppDelegate?,
@@ -50,6 +59,8 @@ final class AITerminalManagerStore: ObservableObject {
 
     deinit {
         pollingTimer?.invalidate()
+        runtimeRefreshTask?.cancel()
+        shannonRunTask?.cancel()
     }
 
     var availableHosts: [AITerminalHost] {
@@ -154,11 +165,15 @@ final class AITerminalManagerStore: ObservableObject {
         supervisor.updateAvailability(for: configuration.supervisor)
         supervisorState = supervisor.state
 
-        if configuration.supervisor.autoStart, case .stopped = supervisor.state {
+        if configuration.supervisor.isEmbeddedRuntime, case .stopped = supervisor.state {
+            supervisor.start(configuration: configuration.supervisor)
+            supervisorState = supervisor.state
+        } else if configuration.supervisor.autoStart, case .stopped = supervisor.state {
             supervisor.start(configuration: configuration.supervisor)
             supervisorState = supervisor.state
         }
 
+        refreshRuntimeStatus(force: true)
         rebuildSessions()
     }
 
@@ -173,13 +188,44 @@ final class AITerminalManagerStore: ObservableObject {
         launch(.localShell())
     }
 
+    func openLocalShell(launchTarget: AITerminalLaunchTarget) {
+        _ = launch(.localShell(), target: launchTarget)
+    }
+
     func open(host: AITerminalHost) {
         open(host: host, directoryOverride: nil)
     }
 
-    func open(host: AITerminalHost, directoryOverride: String?) {
+    func openInNewTab(host: AITerminalHost) {
         if host.isLocal {
-            openLocalShell()
+            openLocalShell(launchTarget: .tab)
+            return
+        }
+
+        open(host: host, directoryOverride: nil, launchTarget: .tab)
+    }
+
+    func newTabPickerEntries() -> [NewTabPickerEntry] {
+        NewTabPickerModel.entries(
+            recentHosts: recentHosts,
+            savedHosts: savedHosts,
+            importedHosts: mergedImportedHosts
+        ) { [weak self] host in
+            self?.hasStoredPassword(for: host) ?? false
+        }
+    }
+
+    func open(host: AITerminalHost, directoryOverride: String?) {
+        open(host: host, directoryOverride: directoryOverride, launchTarget: launchTarget)
+    }
+
+    private func open(
+        host: AITerminalHost,
+        directoryOverride: String?,
+        launchTarget: AITerminalLaunchTarget
+    ) {
+        if host.isLocal {
+            openLocalShell(launchTarget: launchTarget)
             return
         }
 
@@ -197,7 +243,7 @@ final class AITerminalManagerStore: ObservableObject {
             return
         }
 
-        guard let sessionID = launch(plan) else { return }
+        guard let sessionID = launch(plan, target: launchTarget) else { return }
         registerRemoteSession(sessionID, host: host, savedPassword: savedPassword)
         recordRecentHost(host.id, status: .connected)
     }
@@ -220,7 +266,7 @@ final class AITerminalManagerStore: ObservableObject {
         }
         let savedPassword = passwordResolution.password
 
-        guard let sessionID = launch(plan) else { return }
+        guard let sessionID = launch(plan, target: launchTarget) else { return }
         if !host.isLocal {
             registerRemoteSession(sessionID, host: host, savedPassword: savedPassword)
         }
@@ -541,21 +587,41 @@ final class AITerminalManagerStore: ObservableObject {
 
     func selectSession(_ sessionID: UUID?) {
         guard let sessionID else {
+            shannonRunTask?.cancel()
+            shannonRunTask = nil
             selectedSessionID = nil
             selectedSessionVisibleText = ""
             selectedSessionScreenText = ""
+            shannonResponse = ""
+            pendingShannonApproval = nil
+            shannonRunState = .idle
+            shannonLastToolEvent = nil
             lastError = nil
             return
         }
 
         guard sessions.contains(where: { $0.id == sessionID }) else {
+            shannonRunTask?.cancel()
+            shannonRunTask = nil
             selectedSessionID = nil
             selectedSessionVisibleText = ""
             selectedSessionScreenText = ""
+            shannonResponse = ""
+            pendingShannonApproval = nil
+            shannonRunState = .idle
+            shannonLastToolEvent = nil
             lastError = L10n.AITerminalManager.sessionUnavailable
             return
         }
 
+        if selectedSessionID != sessionID {
+            shannonRunTask?.cancel()
+            shannonRunTask = nil
+            shannonResponse = ""
+            pendingShannonApproval = nil
+            shannonRunState = .idle
+            shannonLastToolEvent = nil
+        }
         selectedSessionID = sessionID
         refreshSelectedSessionSnapshot()
     }
@@ -661,22 +727,465 @@ final class AITerminalManagerStore: ObservableObject {
     func startSupervisor() {
         supervisor.start(configuration: configuration.supervisor)
         supervisorState = supervisor.state
+        refreshRuntimeStatus(force: true)
     }
 
     func stopSupervisor() {
         supervisor.stop()
         supervisorState = supervisor.state
+        runtimeRefreshTask?.cancel()
+        runtimeRefreshTask = nil
+        shannonRunTask?.cancel()
+        shannonRunTask = nil
+        runtimeStatus = .unavailable
+        shannonRunState = .idle
+        pendingShannonApproval = nil
+    }
+
+    func askShannon(_ prompt: String, for sessionID: UUID? = nil) {
+        let trimmedPrompt = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedPrompt.isEmpty else {
+            lastError = L10n.AITerminalManager.shannonPromptEmpty
+            return
+        }
+
+        let targetSessionID = sessionID ?? selectedSessionID
+        guard let targetSessionID else {
+            lastError = L10n.AITerminalManager.selectSessionFirst
+            return
+        }
+
+        guard let session = sessions.first(where: { $0.id == targetSessionID }) else {
+            lastError = L10n.AITerminalManager.sessionUnavailable
+            return
+        }
+
+        guard supervisor.isRunning else {
+            lastError = L10n.AITerminalManager.shannonRuntimeUnavailable
+            return
+        }
+
+        guard let appDelegate = appDelegateProvider(),
+              let surface = appDelegate.findSurface(forUUID: targetSessionID) else {
+            lastError = L10n.AITerminalManager.sessionUnavailable
+            return
+        }
+
+        let visibleText = surface.aiManagerVisibleText()
+        let screenText = surface.aiManagerScreenText()
+        let runtimeRequest = ShannonRuntimeRequest(
+            userPrompt: trimmedPrompt,
+            session: ShannonRuntimeSessionContext(
+                id: targetSessionID,
+                title: session.title,
+                hostID: session.hostID,
+                hostLabel: session.hostLabel,
+                workspaceID: session.workspaceID,
+                workingDirectory: session.workingDirectory,
+                managedState: session.managedState
+            ),
+            visibleText: visibleText,
+            screenText: screenText,
+            availableHosts: availableHosts.map { host in
+                ShannonRuntimeHostContext(
+                    id: host.id,
+                    name: host.name,
+                    transport: host.transport,
+                    sshAlias: host.sshAlias,
+                    hostname: host.hostname,
+                    defaultDirectory: host.defaultDirectory
+                )
+            },
+            availableWorkspaces: workspaces.map { workspace in
+                ShannonRuntimeWorkspaceContext(
+                    id: workspace.id,
+                    name: workspace.name,
+                    hostID: workspace.hostID,
+                    directory: workspace.directory
+                )
+            }
+        )
+
+        shannonRunTask?.cancel()
+        shannonRunTask = nil
+        pendingShannonApproval = nil
+        shannonResponse = ""
+        shannonLastToolEvent = nil
+        shannonRunState = .running
+        lastError = nil
+
+        createTask(for: targetSessionID, title: L10n.AITerminalManager.manageSession(session.title))
+        if let task = task(for: targetSessionID) {
+            updateTask(task.id, state: .active, note: L10n.AITerminalManager.shannonRequestSubmitted)
+        }
+
+        let runtimeConfiguration = configuration.supervisor
+        shannonRunTask = Task { @MainActor [bridgeClient, runtimeConfiguration] in
+            do {
+                for try await event in bridgeClient.streamMessage(
+                    configuration: runtimeConfiguration,
+                    request: runtimeRequest
+                ) {
+                    switch event {
+                    case .delta(let text):
+                        shannonResponse += text
+                    case .tool(let payload):
+                        shannonLastToolEvent = "\(payload.tool) · \(payload.status)"
+                    case .approvalNeeded(let approval):
+                        pendingShannonApproval = approval
+                        shannonRunState = .waitingApproval
+                        requireApproval(for: targetSessionID)
+                        if let task = task(for: targetSessionID) {
+                            updateTask(
+                                task.id,
+                                state: .waitingApproval,
+                                note: L10n.AITerminalManager.shannonApprovalNeeded(approval.tool)
+                            )
+                        }
+                    case .approvalResult(_, let approved):
+                        pendingShannonApproval = nil
+                        shannonRunState = .running
+                        if approved {
+                            resumeTask(for: targetSessionID)
+                        } else {
+                            failTask(for: targetSessionID)
+                        }
+                    case .actionRequested(let request):
+                        shannonLastToolEvent = request.summary
+                        if let task = task(for: request.action.targetSessionID) {
+                            updateTask(task.id, state: .active, note: request.summary)
+                        }
+
+                        do {
+                            let output = try executeShannonAction(request.action)
+                            try await bridgeClient.submitActionResult(
+                                configuration: runtimeConfiguration,
+                                actionID: request.id,
+                                result: ShannonActionExecutionResult(success: true, output: output)
+                            )
+                        } catch {
+                            try await bridgeClient.submitActionResult(
+                                configuration: runtimeConfiguration,
+                                actionID: request.id,
+                                result: ShannonActionExecutionResult(
+                                    success: false,
+                                    output: error.localizedDescription
+                                )
+                            )
+                        }
+                    case .done(let result):
+                        pendingShannonApproval = nil
+                        shannonResponse = result.reply
+                        shannonRunState = .completed
+                        if let task = task(for: targetSessionID) {
+                            updateTask(
+                                task.id,
+                                state: .completed,
+                                note: result.reply.isEmpty
+                                    ? L10n.AITerminalManager.shannonCompleted
+                                    : result.reply
+                            )
+                        }
+                    case .failed(let message):
+                        pendingShannonApproval = nil
+                        shannonRunState = .failed(message: message)
+                        failTask(for: targetSessionID)
+                        lastError = message
+                    }
+                }
+            } catch {
+                if Task.isCancelled {
+                    return
+                }
+                pendingShannonApproval = nil
+                shannonRunState = .failed(message: error.localizedDescription)
+                failTask(for: targetSessionID)
+                lastError = error.localizedDescription
+            }
+
+            shannonRunTask = nil
+        }
+    }
+
+    func respondToShannonApproval(approved: Bool) {
+        guard let approval = pendingShannonApproval else { return }
+        pendingShannonApproval = nil
+
+        let runtimeConfiguration = configuration.supervisor
+        Task { @MainActor [bridgeClient] in
+            if approved {
+                shannonRunState = .running
+            }
+
+            do {
+                try await bridgeClient.submitApproval(
+                    configuration: runtimeConfiguration,
+                    approvalID: approval.id,
+                    approved: approved
+                )
+            } catch {
+                shannonRunState = .failed(message: error.localizedDescription)
+                lastError = error.localizedDescription
+            }
+        }
+    }
+
+    private func executeShannonAction(_ action: ShannonProposedAction) throws -> String {
+        lastError = nil
+
+        switch action.kind {
+        case .sendCommand:
+            guard let payload = action.payload, !payload.isEmpty else {
+                throw NSError(
+                    domain: "AITerminalManagerStore",
+                    code: 1,
+                    userInfo: [NSLocalizedDescriptionKey: "Missing Shannon command payload."]
+                )
+            }
+            sendCommand(payload, to: action.targetSessionID)
+
+        case .sendInput:
+            guard let payload = action.payload, !payload.isEmpty else {
+                throw NSError(
+                    domain: "AITerminalManagerStore",
+                    code: 2,
+                    userInfo: [NSLocalizedDescriptionKey: "Missing Shannon input payload."]
+                )
+            }
+            sendInput(payload, to: action.targetSessionID)
+
+        case .focusSession:
+            focus(sessionID: action.targetSessionID)
+
+        case .closeSession:
+            closeSession(action.targetSessionID)
+
+        case .createLocalTab:
+            return try createLocalTabForShannon(action)
+
+        case .createRemoteTab:
+            return try createRemoteTabForShannon(action)
+
+        case .readTab:
+            return try readTabSnapshot(action.targetSessionID)
+
+        case .closeTab:
+            return try closeTabForShannon(action.targetSessionID)
+        }
+
+        if let lastError, !lastError.isEmpty {
+            throw NSError(
+                domain: "AITerminalManagerStore",
+                code: 3,
+                userInfo: [NSLocalizedDescriptionKey: lastError]
+            )
+        }
+
+        switch action.kind {
+        case .sendCommand:
+            return "send_command · \(action.payload ?? "")"
+        case .sendInput:
+            return "send_input · \(action.payload ?? "")"
+        case .focusSession:
+            return "focus_session"
+        case .closeSession:
+            return "close_session"
+        case .createLocalTab:
+            return "create_local_tab"
+        case .createRemoteTab:
+            return "create_remote_tab"
+        case .readTab:
+            return "read_tab"
+        case .closeTab:
+            return "close_tab"
+        }
+    }
+
+    private func createLocalTabForShannon(_ action: ShannonProposedAction) throws -> String {
+        let plan: AITerminalLaunchPlan
+
+        if let workspaceID = action.workspaceID {
+            guard let workspace = workspaces.first(where: { $0.id == workspaceID }) else {
+                throw NSError(
+                    domain: "AITerminalManagerStore",
+                    code: 10,
+                    userInfo: [NSLocalizedDescriptionKey: "Unknown local workspace for Shannon action."]
+                )
+            }
+            guard let host = availableHosts.first(where: { $0.id == workspace.hostID }), host.isLocal else {
+                throw NSError(
+                    domain: "AITerminalManagerStore",
+                    code: 11,
+                    userInfo: [NSLocalizedDescriptionKey: "The requested workspace is not local."]
+                )
+            }
+            guard let workspacePlan = AITerminalLaunchPlan.workspace(workspace, host: host) else {
+                throw NSError(
+                    domain: "AITerminalManagerStore",
+                    code: 12,
+                    userInfo: [NSLocalizedDescriptionKey: "Unable to build the local workspace launch plan."]
+                )
+            }
+            plan = workspacePlan
+        } else {
+            plan = AITerminalLaunchPlan.localShell(
+                directoryOverride: action.directoryOverride,
+                sourceLabel: AITerminalHost.local.name
+            )
+        }
+
+        guard let sessionID = launch(plan, target: .tab) else {
+            throw NSError(
+                domain: "AITerminalManagerStore",
+                code: 13,
+                userInfo: [NSLocalizedDescriptionKey: lastError ?? L10n.AITerminalManager.createSessionFailed]
+            )
+        }
+
+        let title = sessions.first(where: { $0.id == sessionID })?.title ?? sessionID.uuidString
+        return "create_local_tab · \(title)"
+    }
+
+    private func createRemoteTabForShannon(_ action: ShannonProposedAction) throws -> String {
+        let host: AITerminalHost
+        let plan: AITerminalLaunchPlan
+
+        if let workspaceID = action.workspaceID {
+            guard let workspace = workspaces.first(where: { $0.id == workspaceID }) else {
+                throw NSError(
+                    domain: "AITerminalManagerStore",
+                    code: 20,
+                    userInfo: [NSLocalizedDescriptionKey: "Unknown remote workspace for Shannon action."]
+                )
+            }
+            guard let workspaceHost = availableHosts.first(where: { $0.id == workspace.hostID }), !workspaceHost.isLocal else {
+                throw NSError(
+                    domain: "AITerminalManagerStore",
+                    code: 21,
+                    userInfo: [NSLocalizedDescriptionKey: "The requested workspace is not remote."]
+                )
+            }
+            guard let workspacePlan = AITerminalLaunchPlan.workspace(workspace, host: workspaceHost) else {
+                throw NSError(
+                    domain: "AITerminalManagerStore",
+                    code: 22,
+                    userInfo: [NSLocalizedDescriptionKey: "Unable to build the remote workspace launch plan."]
+                )
+            }
+            host = workspaceHost
+            plan = workspacePlan
+        } else {
+            guard let hostID = action.hostID,
+                  let remoteHost = availableHosts.first(where: { $0.id == hostID }),
+                  !remoteHost.isLocal else {
+                throw NSError(
+                    domain: "AITerminalManagerStore",
+                    code: 23,
+                    userInfo: [NSLocalizedDescriptionKey: "Unknown remote host for Shannon action."]
+                )
+            }
+            guard let remotePlan = AITerminalLaunchPlan.remote(
+                host: remoteHost,
+                directoryOverride: action.directoryOverride
+            ) else {
+                throw NSError(
+                    domain: "AITerminalManagerStore",
+                    code: 24,
+                    userInfo: [NSLocalizedDescriptionKey: L10n.AITerminalManager.hostMissingSSHDetails]
+                )
+            }
+            host = remoteHost
+            plan = remotePlan
+        }
+
+        let passwordResolution = resolvedPasswordAutomation(for: host)
+        if let message = passwordResolution.error {
+            throw NSError(
+                domain: "AITerminalManagerStore",
+                code: 25,
+                userInfo: [NSLocalizedDescriptionKey: message]
+            )
+        }
+
+        guard let sessionID = launch(plan, target: .tab) else {
+            throw NSError(
+                domain: "AITerminalManagerStore",
+                code: 26,
+                userInfo: [NSLocalizedDescriptionKey: lastError ?? L10n.AITerminalManager.createSessionFailed]
+            )
+        }
+
+        registerRemoteSession(sessionID, host: host, savedPassword: passwordResolution.password)
+        recordRecentHost(host.id, status: .connected)
+        let title = sessions.first(where: { $0.id == sessionID })?.title ?? host.name
+        return "create_remote_tab · \(host.name) · \(title)"
+    }
+
+    private func readTabSnapshot(_ sessionID: UUID) throws -> String {
+        guard let appDelegate = appDelegateProvider(),
+              let surface = appDelegate.findSurface(forUUID: sessionID) else {
+            throw NSError(
+                domain: "AITerminalManagerStore",
+                code: 30,
+                userInfo: [NSLocalizedDescriptionKey: L10n.AITerminalManager.sessionUnavailable]
+            )
+        }
+
+        let session = sessions.first(where: { $0.id == sessionID })
+        let visibleText = surface.aiManagerVisibleText()
+        let screenText = surface.aiManagerScreenText()
+
+        if selectedSessionID == sessionID {
+            selectedSessionVisibleText = visibleText
+            selectedSessionScreenText = screenText
+        }
+
+        return """
+        Tab title: \(session?.title ?? surface.title)
+        Host: \(session?.hostLabel ?? L10n.AITerminalManager.manualSession)
+        Working directory: \(session?.workingDirectory ?? surface.pwd ?? "unknown")
+
+        Visible buffer:
+        \(visibleText.isEmpty ? "(empty)" : visibleText)
+
+        Screen buffer:
+        \(screenText.isEmpty ? "(empty)" : screenText)
+        """
+    }
+
+    private func closeTabForShannon(_ sessionID: UUID) throws -> String {
+        guard let controller = terminalController(for: sessionID) else {
+            throw NSError(
+                domain: "AITerminalManagerStore",
+                code: 40,
+                userInfo: [NSLocalizedDescriptionKey: L10n.AITerminalManager.sessionUnavailable]
+            )
+        }
+
+        let title = sessions.first(where: { $0.id == sessionID })?.title ?? sessionID.uuidString
+        controller.closeTabImmediately()
+        rebuildSessions()
+        return "close_tab · \(title)"
+    }
+
+    private func terminalController(for sessionID: UUID) -> TerminalController? {
+        TerminalController.all.first { controller in
+            controller.surfaceTree.contains(where: { $0.id == sessionID })
+        }
     }
 
     @discardableResult
-    private func launch(_ plan: AITerminalLaunchPlan) -> UUID? {
+    private func launch(
+        _ plan: AITerminalLaunchPlan,
+        target: AITerminalLaunchTarget? = nil
+    ) -> UUID? {
         guard let appDelegate = appDelegateProvider() else {
             lastError = L10n.AITerminalManager.appDelegateUnavailable
             return nil
         }
 
         let createdSurface: Ghostty.SurfaceView?
-        switch launchTarget {
+        switch target ?? launchTarget {
         case .tab:
             if let controller = TerminalController.newTab(
                 appDelegate.ghostty,
@@ -743,7 +1252,9 @@ final class AITerminalManagerStore: ObservableObject {
                         title: title,
                         workingDirectory: surface.pwd,
                         isFocused: surface.focused,
+                        hostID: registration?.hostID,
                         hostLabel: hostLabel,
+                        workspaceID: registration?.workspaceID,
                         managedState: registration?.managedState ?? .manual,
                         taskID: task?.id,
                         taskTitle: task?.title,
@@ -770,6 +1281,7 @@ final class AITerminalManagerStore: ObservableObject {
         }
 
         supervisorState = supervisor.state
+        refreshRuntimeStatus()
     }
 
     private func startPolling() {
@@ -781,6 +1293,56 @@ final class AITerminalManagerStore: ObservableObject {
         }
         if let pollingTimer {
             RunLoop.main.add(pollingTimer, forMode: .common)
+        }
+    }
+
+    private func refreshRuntimeStatus(force: Bool = false) {
+        guard supervisor.isRunning else {
+            runtimeRefreshTask?.cancel()
+            runtimeRefreshTask = nil
+            runtimeStatus = .unavailable
+            return
+        }
+
+        guard force || Date.now.timeIntervalSince(lastRuntimeRefreshAt) >= 2 else {
+            return
+        }
+
+        guard runtimeRefreshTask == nil else {
+            return
+        }
+
+        let supervisorConfiguration = self.configuration.supervisor
+        runtimeStatus = ShannonRuntimeStatus(
+            baseURL: supervisorConfiguration.isEmbeddedRuntime
+                ? "embedded://ghostty-shannon"
+                : supervisorConfiguration.resolvedControlURL?.absoluteString,
+            health: .probing,
+            version: runtimeStatus.version,
+            gatewayConnected: runtimeStatus.gatewayConnected,
+            activeAgent: runtimeStatus.activeAgent,
+            uptimeSeconds: runtimeStatus.uptimeSeconds
+        )
+        lastRuntimeRefreshAt = .now
+
+        runtimeRefreshTask = Task { @MainActor [bridgeClient, supervisorConfiguration] in
+            let status = await bridgeClient.fetchRuntimeStatus(configuration: supervisorConfiguration)
+            if !Task.isCancelled {
+                self.runtimeStatus = status
+            }
+            self.runtimeRefreshTask = nil
+        }
+    }
+
+    var shannonStatusText: String {
+        switch shannonRunState {
+        case .idle:
+            return shannonLastToolEvent ?? L10n.AITerminalManager.shannonIdle
+        case .running, .waitingApproval, .completed, .failed:
+            if let shannonLastToolEvent, !shannonLastToolEvent.isEmpty {
+                return "\(shannonRunState.displayName) · \(shannonLastToolEvent)"
+            }
+            return shannonRunState.displayName
         }
     }
 
@@ -1084,5 +1646,29 @@ final class AITerminalManagerStore: ObservableObject {
     nonisolated static func textPayload(for input: String) -> String? {
         guard !input.isEmpty else { return nil }
         return input
+    }
+
+    nonisolated static func shannonPrompt(
+        userPrompt: String,
+        session: AITerminalSessionSummary,
+        visibleText: String,
+        screenText: String
+    ) -> String {
+        ShannonRuntimeRequest(
+            userPrompt: userPrompt,
+            session: ShannonRuntimeSessionContext(
+                id: session.id,
+                title: session.title,
+                hostID: session.hostID,
+                hostLabel: session.hostLabel,
+                workspaceID: session.workspaceID,
+                workingDirectory: session.workingDirectory,
+                managedState: session.managedState
+            ),
+            visibleText: visibleText,
+            screenText: screenText,
+            availableHosts: [],
+            availableWorkspaces: []
+        ).externalPromptText
     }
 }

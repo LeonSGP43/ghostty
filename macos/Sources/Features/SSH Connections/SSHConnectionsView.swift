@@ -3,24 +3,8 @@ import Foundation
 import SwiftUI
 
 struct SSHConnectionsView: View {
-    private struct VisualEffectBackground: NSViewRepresentable {
-        let material: NSVisualEffectView.Material
-
-        func makeNSView(context: Context) -> NSVisualEffectView {
-            let view = NSVisualEffectView()
-            view.state = .active
-            view.blendingMode = .behindWindow
-            view.material = material
-            return view
-        }
-
-        func updateNSView(_ nsView: NSVisualEffectView, context: Context) {
-            nsView.material = material
-        }
-    }
-
-    @Environment(\.colorScheme) private var colorScheme
     @EnvironmentObject private var store: AITerminalManagerStore
+    @EnvironmentObject private var theme: GhosttyChromeTheme
 
     @State private var hostName = ""
     @State private var hostAlias = ""
@@ -37,7 +21,7 @@ struct SSHConnectionsView: View {
 
     var body: some View {
         ZStack {
-            VisualEffectBackground(material: .underWindowBackground)
+            GhosttyTintedBackground()
                 .ignoresSafeArea()
 
             VStack(spacing: 0) {
@@ -61,6 +45,7 @@ struct SSHConnectionsView: View {
             }
         }
         .frame(minWidth: 1240, minHeight: 780)
+        .environment(\.colorScheme, theme.colorScheme)
         .sheet(isPresented: $isPresentingEditor) {
             hostEditorSheet
         }
@@ -569,7 +554,7 @@ struct SSHConnectionsView: View {
             .foregroundStyle(.secondary)
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
-            .background(Color.white.opacity(colorScheme == .dark ? 0.06 : 0.6), in: Capsule())
+            .background(Color.white.opacity(theme.isLight ? 0.8 : 0.08), in: Capsule())
     }
 
     private func statusPill(for recentRecord: AITerminalRecentHostRecord) -> some View {
@@ -586,18 +571,18 @@ struct SSHConnectionsView: View {
 
     private func rowBackground(for host: AITerminalHost) -> Color {
         if selectedHostID == host.id {
-            return Color.accentColor.opacity(colorScheme == .dark ? 0.18 : 0.12)
+            return Color.accentColor.opacity(theme.isLight ? 0.12 : 0.18)
         }
 
-        return Color.white.opacity(colorScheme == .dark ? 0.035 : 0.55)
+        return Color.white.opacity(theme.isLight ? 0.56 : 0.05)
     }
 
     private func rowBorder(for host: AITerminalHost) -> Color {
         if selectedHostID == host.id {
-            return Color.accentColor.opacity(colorScheme == .dark ? 0.32 : 0.2)
+            return Color.accentColor.opacity(theme.isLight ? 0.2 : 0.32)
         }
 
-        return Color(nsColor: .separatorColor).opacity(colorScheme == .dark ? 0.18 : 0.1)
+        return Color(nsColor: .separatorColor).opacity(theme.isLight ? 0.16 : 0.22)
     }
 
     private func authStateColor(_ authState: AITerminalSSHSessionAuthState) -> Color {
@@ -850,24 +835,24 @@ private extension View {
     func panelSurface() -> some View {
         self
             .background(
-                Color.white.opacity(0.03),
+                Color.white.opacity(0.08),
                 in: RoundedRectangle(cornerRadius: 22)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 22)
-                    .stroke(Color(nsColor: .separatorColor).opacity(0.16), lineWidth: 1)
+                    .stroke(Color(nsColor: .separatorColor).opacity(0.18), lineWidth: 1)
             )
     }
 
     func subpanelSurface() -> some View {
         self
             .background(
-                Color.white.opacity(0.045),
+                Color.white.opacity(0.1),
                 in: RoundedRectangle(cornerRadius: 16)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 16)
-                    .stroke(Color(nsColor: .separatorColor).opacity(0.12), lineWidth: 1)
+                    .stroke(Color(nsColor: .separatorColor).opacity(0.14), lineWidth: 1)
             )
     }
 }
@@ -882,4 +867,5 @@ private extension View {
                     .appendingPathExtension("json")
             )
         )
+        .environmentObject(GhosttyChromeTheme())
 }

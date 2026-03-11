@@ -257,17 +257,253 @@ struct ShannonSupervisorConfiguration: Codable, Hashable, Sendable {
     var arguments: [String]
     var autoStart: Bool
     var environment: [String: String]
+    var controlURL: String?
+    var requestTimeoutSeconds: Int
 
     init(
         binaryPath: String? = ProcessInfo.processInfo.environment["GHOSTTY_SHANNON_PATH"],
         arguments: [String] = [],
         autoStart: Bool = false,
-        environment: [String: String] = [:]
+        environment: [String: String] = [:],
+        controlURL: String? = ProcessInfo.processInfo.environment["GHOSTTY_SHANNON_CONTROL_URL"],
+        requestTimeoutSeconds: Int = 2
     ) {
         self.binaryPath = binaryPath
         self.arguments = arguments
         self.autoStart = autoStart
         self.environment = environment
+        self.controlURL = controlURL
+        self.requestTimeoutSeconds = requestTimeoutSeconds
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case binaryPath
+        case arguments
+        case autoStart
+        case environment
+        case controlURL
+        case requestTimeoutSeconds
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        binaryPath = try container.decodeIfPresent(String.self, forKey: .binaryPath)
+        arguments = try container.decodeIfPresent([String].self, forKey: .arguments) ?? []
+        autoStart = try container.decodeIfPresent(Bool.self, forKey: .autoStart) ?? false
+        environment = try container.decodeIfPresent([String: String].self, forKey: .environment) ?? [:]
+        controlURL = try container.decodeIfPresent(String.self, forKey: .controlURL)
+            ?? ProcessInfo.processInfo.environment["GHOSTTY_SHANNON_CONTROL_URL"]
+        requestTimeoutSeconds = try container.decodeIfPresent(Int.self, forKey: .requestTimeoutSeconds) ?? 2
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(binaryPath, forKey: .binaryPath)
+        try container.encode(arguments, forKey: .arguments)
+        try container.encode(autoStart, forKey: .autoStart)
+        try container.encode(environment, forKey: .environment)
+        try container.encodeIfPresent(controlURL, forKey: .controlURL)
+        try container.encode(requestTimeoutSeconds, forKey: .requestTimeoutSeconds)
+    }
+
+    var isEmbeddedRuntime: Bool {
+        guard let binaryPath else { return true }
+        return binaryPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    var isLaunchable: Bool {
+        if isEmbeddedRuntime {
+            return true
+        }
+
+        guard let binaryPath else { return false }
+        return !binaryPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    var resolvedArguments: [String] {
+        if !arguments.isEmpty {
+            return arguments
+        }
+
+        guard isLikelyShanBinary else {
+            return []
+        }
+
+        return ["daemon", "start"]
+    }
+
+    var resolvedControlURL: URL? {
+        guard !isEmbeddedRuntime else {
+            return nil
+        }
+
+        if let controlURL,
+           !controlURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+           let url = URL(string: controlURL) {
+            return url
+        }
+
+        guard isLikelyShanBinary else {
+            return nil
+        }
+
+        return URL(string: "http://127.0.0.1:7533")
+    }
+
+    private var isLikelyShanBinary: Bool {
+        guard let binaryPath else { return false }
+        let name = URL(fileURLWithPath: binaryPath).lastPathComponent.lowercased()
+        return name == "shan" || name.hasPrefix("shan-")
+    }
+}
+
+enum ShannonRuntimeHealth: Equatable, Sendable {
+    case unavailable
+    case probing
+    case healthy
+    case unreachable(message: String)
+
+    var displayName: String {
+        switch self {
+        case .unavailable:
+            L10n.AITerminalManager.runtimeUnavailable
+        case .probing:
+            L10n.AITerminalManager.runtimeProbing
+        case .healthy:
+            L10n.AITerminalManager.runtimeHealthy
+        case .unreachable(let message):
+            L10n.AITerminalManager.runtimeUnreachable(message)
+        }
+    }
+
+    var isUsable: Bool {
+        switch self {
+        case .healthy, .probing:
+            true
+        case .unavailable, .unreachable:
+            false
+        }
+    }
+}
+
+struct ShannonRuntimeStatus: Equatable, Sendable {
+    var baseURL: String?
+    var health: ShannonRuntimeHealth
+    var version: String?
+    var gatewayConnected: Bool?
+    var activeAgent: String?
+    var uptimeSeconds: Int?
+
+    static let unavailable = ShannonRuntimeStatus(
+        baseURL: nil,
+        health: .unavailable,
+        version: nil,
+        gatewayConnected: nil,
+        activeAgent: nil,
+        uptimeSeconds: nil
+    )
+
+    var gatewayDisplayName: String {
+        switch gatewayConnected {
+        case .some(true):
+            L10n.AITerminalManager.runtimeGatewayConnected
+        case .some(false):
+            L10n.AITerminalManager.runtimeGatewayDisconnected
+        case .none:
+            "—"
+        }
+    }
+
+    var uptimeDisplayName: String {
+        guard let uptimeSeconds else { return "—" }
+        let duration = TimeInterval(uptimeSeconds)
+
+        let formatter = DateComponentsFormatter()
+        formatter.allowedUnits = duration >= 3600 ? [.hour, .minute, .second] : [.minute, .second]
+        formatter.unitsStyle = .abbreviated
+        formatter.zeroFormattingBehavior = [.pad]
+        return formatter.string(from: duration) ?? "\(uptimeSeconds)s"
+    }
+
+    var healthIsUsable: Bool {
+        health.isUsable
+    }
+}
+
+struct ShannonPendingApproval: Equatable, Identifiable, Sendable {
+    let id: String
+    var tool: String
+    var args: String
+    var action: ShannonProposedAction?
+
+    init(
+        id: String,
+        tool: String,
+        args: String,
+        action: ShannonProposedAction? = nil
+    ) {
+        self.id = id
+        self.tool = tool
+        self.args = args
+        self.action = action
+    }
+}
+
+enum ShannonRunState: Equatable, Sendable {
+    case idle
+    case running
+    case waitingApproval
+    case completed
+    case failed(message: String)
+
+    var displayName: String {
+        switch self {
+        case .idle:
+            L10n.AITerminalManager.shannonIdle
+        case .running:
+            L10n.AITerminalManager.shannonRunning
+        case .waitingApproval:
+            L10n.AITerminalManager.shannonWaitingApproval
+        case .completed:
+            L10n.AITerminalManager.shannonCompleted
+        case .failed(let message):
+            L10n.AITerminalManager.shannonFailed(message)
+        }
+    }
+}
+
+enum ShannonProposedActionKind: String, Equatable, Sendable {
+    case sendCommand = "send_command"
+    case sendInput = "send_input"
+    case focusSession = "focus_session"
+    case closeSession = "close_session"
+    case createLocalTab = "create_local_tab"
+    case createRemoteTab = "create_remote_tab"
+    case readTab = "read_tab"
+    case closeTab = "close_tab"
+}
+
+struct ShannonProposedAction: Equatable, Sendable {
+    var targetSessionID: UUID
+    var kind: ShannonProposedActionKind
+    var payload: String?
+    var hostID: String?
+    var workspaceID: String?
+    var directoryOverride: String?
+
+    var requiresApproval: Bool {
+        switch kind {
+        case .readTab:
+            false
+        case .sendCommand,
+             .sendInput,
+             .focusSession,
+             .closeSession,
+             .createLocalTab,
+             .createRemoteTab,
+             .closeTab:
+            true
+        }
     }
 }
 
@@ -369,7 +605,9 @@ struct AITerminalSessionSummary: Identifiable, Hashable {
     var title: String
     var workingDirectory: String?
     var isFocused: Bool
+    var hostID: String?
     var hostLabel: String
+    var workspaceID: String?
     var managedState: AITerminalManagedState
     var taskID: UUID?
     var taskTitle: String?
@@ -428,17 +666,27 @@ struct AITerminalLaunchPlan {
     var surfaceConfiguration: Ghostty.SurfaceConfiguration
     var registration: AITerminalLaunchRegistration
 
-    static func localShell() -> AITerminalLaunchPlan {
+    static func localShell(
+        directoryOverride: String? = nil,
+        workspaceID: String? = nil,
+        sourceLabel: String? = nil
+    ) -> AITerminalLaunchPlan {
         var config = Ghostty.SurfaceConfiguration()
+        if let directoryOverride, !directoryOverride.isEmpty {
+            config.workingDirectory = directoryOverride
+        }
         config.environmentVariables["GHOSTTY_AI_MANAGER"] = "1"
         config.environmentVariables["GHOSTTY_AI_SESSION_KIND"] = "local"
+        if let workspaceID, !workspaceID.isEmpty {
+            config.environmentVariables["GHOSTTY_AI_WORKSPACE_ID"] = workspaceID
+        }
         return .init(
             surfaceConfiguration: config,
             registration: .init(
                 hostID: AITerminalHost.local.id,
-                workspaceID: nil,
+                workspaceID: workspaceID,
                 managedState: .manual,
-                sourceLabel: AITerminalHost.local.name
+                sourceLabel: sourceLabel ?? AITerminalHost.local.name
             )
         )
     }

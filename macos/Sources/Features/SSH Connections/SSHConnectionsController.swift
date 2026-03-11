@@ -3,6 +3,9 @@ import SwiftUI
 
 final class SSHConnectionsController: NSWindowController, NSWindowDelegate {
     private let store: AITerminalManagerStore
+    private let theme = GhosttyChromeTheme()
+    private var configObserver: NSObjectProtocol?
+    private weak var referenceWindow: NSWindow?
 
     static func windowsAreInSameTabGroup(_ lhs: NSWindow?, _ rhs: NSWindow?) -> Bool {
         guard
@@ -25,6 +28,8 @@ final class SSHConnectionsController: NSWindowController, NSWindowDelegate {
         window.title = L10n.SSHConnections.windowTitle
         window.isReleasedWhenClosed = false
         window.minSize = NSSize(width: 1280, height: 760)
+        window.titlebarAppearsTransparent = true
+        window.titleVisibility = .hidden
         window.tabbingMode = .preferred
         DispatchQueue.main.async {
             window.tabbingMode = .automatic
@@ -33,10 +38,19 @@ final class SSHConnectionsController: NSWindowController, NSWindowDelegate {
         window.contentView = NSHostingView(
             rootView: SSHConnectionsView()
                 .environmentObject(store)
+                .environmentObject(theme)
         )
 
         super.init(window: window)
         window.delegate = self
+
+        configObserver = NotificationCenter.default.addObserver(
+            forName: .ghosttyConfigDidChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.syncChrome()
+        }
     }
 
     @available(*, unavailable)
@@ -44,8 +58,16 @@ final class SSHConnectionsController: NSWindowController, NSWindowDelegate {
         fatalError("init(coder:) is not supported for SSHConnectionsController")
     }
 
+    deinit {
+        if let configObserver {
+            NotificationCenter.default.removeObserver(configObserver)
+        }
+    }
+
     func show(tabbedInto parentWindow: NSWindow? = TerminalController.preferredParent?.window) {
         store.refresh()
+        referenceWindow = parentWindow
+        syncChrome()
 
         if let window,
            let parentWindow,
@@ -64,5 +86,19 @@ final class SSHConnectionsController: NSWindowController, NSWindowDelegate {
 
         window?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+    }
+
+    private func syncChrome() {
+        let appDelegate = NSApp.delegate as? AppDelegate
+        let backgroundColor = GhosttyChrome.resolvedBackgroundColor(
+            appDelegate: appDelegate,
+            referenceWindow: referenceWindow
+        )
+        theme.apply(backgroundColor: backgroundColor)
+        GhosttyChrome.syncWindowAppearance(
+            window,
+            appDelegate: appDelegate,
+            referenceWindow: referenceWindow
+        )
     }
 }

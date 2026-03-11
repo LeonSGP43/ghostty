@@ -75,6 +75,67 @@ struct AITerminalManagerTests {
         #expect(command == "ssh buildbox -t 'cd /srv/app && exec ${SHELL:-/bin/sh} -l'\n")
     }
 
+    @Test func supervisorConfigurationInfersShanDaemonDefaults() {
+        let configuration = ShannonSupervisorConfiguration(
+            binaryPath: "/usr/local/bin/shan"
+        )
+
+        #expect(configuration.isEmbeddedRuntime == false)
+        #expect(configuration.isLaunchable)
+        #expect(configuration.resolvedArguments == ["daemon", "start"])
+        #expect(configuration.resolvedControlURL?.absoluteString == "http://127.0.0.1:7533")
+    }
+
+    @Test func supervisorConfigurationDefaultsToEmbeddedRuntime() {
+        let configuration = ShannonSupervisorConfiguration()
+
+        #expect(configuration.isEmbeddedRuntime)
+        #expect(configuration.isLaunchable)
+        #expect(configuration.resolvedControlURL == nil)
+    }
+
+    @Test func supervisorConfigurationPreservesExplicitBridgeOverrides() {
+        let configuration = ShannonSupervisorConfiguration(
+            binaryPath: "/usr/local/bin/shan",
+            arguments: ["daemon", "start", "--verbose"],
+            controlURL: "http://127.0.0.1:9000",
+            requestTimeoutSeconds: 5
+        )
+
+        #expect(configuration.resolvedArguments == ["daemon", "start", "--verbose"])
+        #expect(configuration.resolvedControlURL?.absoluteString == "http://127.0.0.1:9000")
+        #expect(configuration.requestTimeoutSeconds == 5)
+    }
+
+    @Test func shannonPromptIncludesSessionContext() {
+        let session = AITerminalSessionSummary(
+            id: UUID(),
+            title: "Server",
+            workingDirectory: "/tmp/app",
+            isFocused: true,
+            hostID: AITerminalHost.local.id,
+            hostLabel: "This Mac",
+            workspaceID: nil,
+            managedState: .managedActive,
+            taskID: nil,
+            taskTitle: nil,
+            taskState: nil
+        )
+
+        let prompt = AITerminalManagerStore.shannonPrompt(
+            userPrompt: "检查这个终端现在在做什么",
+            session: session,
+            visibleText: "npm run dev",
+            screenText: "ready on http://localhost:3000"
+        )
+
+        #expect(prompt.contains("Session title: Server"))
+        #expect(prompt.contains("Working directory: /tmp/app"))
+        #expect(prompt.contains("Visible buffer:"))
+        #expect(prompt.contains("ready on http://localhost:3000"))
+        #expect(prompt.contains("User request:"))
+    }
+
     @Test func mergesImportedHostOverrides() {
         let imported = [
             AITerminalHost(
@@ -123,6 +184,146 @@ struct AITerminalManagerTests {
         let plan = try #require(AITerminalLaunchPlan.workspace(workspace, host: .local))
         #expect(plan.surfaceConfiguration.workingDirectory == "/tmp/ghostty")
         #expect(plan.registration.workspaceID == "workspace:test")
+    }
+
+    @Test func localShellPlanSupportsDirectoryOverride() {
+        let plan = AITerminalLaunchPlan.localShell(
+            directoryOverride: "/tmp/runtime",
+            workspaceID: "workspace:runtime",
+            sourceLabel: "Runtime"
+        )
+
+        #expect(plan.surfaceConfiguration.workingDirectory == "/tmp/runtime")
+        #expect(plan.registration.workspaceID == "workspace:runtime")
+        #expect(plan.registration.sourceLabel == "Runtime")
+    }
+
+    @Test func embeddedRuntimeRequestsReadTabWithoutApproval() async throws {
+        let runtime = EmbeddedShannonRuntime()
+        let sessionID = UUID()
+        let request = ShannonRuntimeRequest(
+            userPrompt: "read tab",
+            session: ShannonRuntimeSessionContext(
+                id: sessionID,
+                title: "Server",
+                hostID: AITerminalHost.local.id,
+                hostLabel: "This Mac",
+                workspaceID: nil,
+                workingDirectory: "/tmp/app",
+                managedState: .managedActive
+            ),
+            visibleText: "npm run dev",
+            screenText: "ready on http://localhost:3000",
+            availableHosts: [
+                ShannonRuntimeHostContext(
+                    id: AITerminalHost.local.id,
+                    name: "This Mac",
+                    transport: .local,
+                    sshAlias: nil,
+                    hostname: nil,
+                    defaultDirectory: nil
+                ),
+            ],
+            availableWorkspaces: []
+        )
+
+        var sawApproval = false
+        var sawAction = false
+        var finalReply: String?
+
+        for try await event in runtime.streamMessage(request) {
+            switch event {
+            case .approvalNeeded:
+                sawApproval = true
+            case .actionRequested(let actionRequest):
+                sawAction = true
+                #expect(actionRequest.action.kind == .readTab)
+                try await runtime.submitActionResult(
+                    id: actionRequest.id,
+                    result: ShannonActionExecutionResult(
+                        success: true,
+                        output: "Tab title: Server\nVisible buffer:\nnpm run dev"
+                    )
+                )
+            case .done(let result):
+                finalReply = result.reply
+            default:
+                break
+            }
+        }
+
+        #expect(sawApproval == false)
+        #expect(sawAction)
+        #expect(finalReply?.contains("Tab title: Server") == true)
+    }
+
+    @Test func embeddedRuntimeRequestsApprovalBeforeRemoteTabCreation() async throws {
+        let runtime = EmbeddedShannonRuntime()
+        let sessionID = UUID()
+        let request = ShannonRuntimeRequest(
+            userPrompt: "开一个到 buildbox 的新 tab",
+            session: ShannonRuntimeSessionContext(
+                id: sessionID,
+                title: "Current",
+                hostID: AITerminalHost.local.id,
+                hostLabel: "This Mac",
+                workspaceID: nil,
+                workingDirectory: "/tmp/app",
+                managedState: .managedActive
+            ),
+            visibleText: "",
+            screenText: "$",
+            availableHosts: [
+                ShannonRuntimeHostContext(
+                    id: AITerminalHost.local.id,
+                    name: "This Mac",
+                    transport: .local,
+                    sshAlias: nil,
+                    hostname: nil,
+                    defaultDirectory: nil
+                ),
+                ShannonRuntimeHostContext(
+                    id: "ssh:buildbox",
+                    name: "buildbox",
+                    transport: .ssh,
+                    sshAlias: "buildbox",
+                    hostname: "10.0.0.5",
+                    defaultDirectory: "/srv/app"
+                ),
+            ],
+            availableWorkspaces: []
+        )
+
+        var approvalAction: ShannonProposedAction?
+        var sawExecution = false
+        var finalReply: String?
+
+        for try await event in runtime.streamMessage(request) {
+            switch event {
+            case .approvalNeeded(let approval):
+                approvalAction = approval.action
+                try await runtime.submitApproval(id: approval.id, approved: true)
+            case .actionRequested(let actionRequest):
+                sawExecution = true
+                #expect(actionRequest.action.kind == .createRemoteTab)
+                #expect(actionRequest.action.hostID == "ssh:buildbox")
+                try await runtime.submitActionResult(
+                    id: actionRequest.id,
+                    result: ShannonActionExecutionResult(
+                        success: true,
+                        output: "create_remote_tab · buildbox · buildbox"
+                    )
+                )
+            case .done(let result):
+                finalReply = result.reply
+            default:
+                break
+            }
+        }
+
+        #expect(approvalAction?.kind == .createRemoteTab)
+        #expect(sawExecution)
+        #expect(finalReply?.contains("buildbox") == true)
     }
 
     @Test @MainActor func storeSavesConfiguredHost() throws {
@@ -228,6 +429,82 @@ struct AITerminalManagerTests {
         #expect(displayRecent.map(\.id) == ["ssh:recent"])
         #expect(displaySaved.map(\.id) == ["ssh:saved"])
         #expect(displayImported.map(\.id) == ["ssh:imported"])
+    }
+
+    @Test func newTabPickerEntriesKeepLocalFirstAndSectionOrder() {
+        let recent = [
+            AITerminalHost(
+                id: "ssh:recent",
+                name: "Recent",
+                transport: .ssh,
+                sshAlias: "recent",
+                hostname: "10.0.0.1",
+                user: "leon",
+                port: 22,
+                defaultDirectory: nil,
+                source: .configurationFile
+            ),
+        ]
+        let saved = [
+            recent[0],
+            AITerminalHost(
+                id: "ssh:saved",
+                name: "Saved",
+                transport: .ssh,
+                sshAlias: "saved",
+                hostname: "10.0.0.2",
+                user: "leon",
+                port: 22,
+                defaultDirectory: nil,
+                source: .configurationFile
+            ),
+        ]
+        let imported = [
+            saved[1],
+            AITerminalHost(
+                id: "ssh:imported",
+                name: "Imported",
+                transport: .ssh,
+                sshAlias: "imported",
+                hostname: "10.0.0.3",
+                user: "leon",
+                port: 22,
+                defaultDirectory: nil,
+                source: .sshConfig
+            ),
+        ]
+
+        let entries = NewTabPickerModel.entries(
+            recentHosts: recent,
+            savedHosts: saved,
+            importedHosts: imported
+        ) { _ in false }
+
+        #expect(entries.map(\.id) == ["local", "ssh:recent", "ssh:saved", "ssh:imported"])
+        #expect(entries.map(\.shortcutIndex) == [1, 2, 3, 4])
+    }
+
+    @Test func newTabPickerEntriesExcludePasswordHostsWithoutStoredSecret() {
+        let missingPasswordHost = AITerminalHost(
+            id: "ssh:password",
+            name: "Password",
+            transport: .ssh,
+            sshAlias: nil,
+            hostname: "10.0.0.4",
+            user: "leon",
+            port: 22,
+            defaultDirectory: nil,
+            source: .configurationFile,
+            authMode: .password
+        )
+
+        let entries = NewTabPickerModel.entries(
+            recentHosts: [],
+            savedHosts: [missingPasswordHost],
+            importedHosts: []
+        ) { _ in false }
+
+        #expect(entries.map(\.id) == ["local"])
     }
 
     @Test @MainActor func storeSavesHostWithoutExplicitName() {
