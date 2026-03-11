@@ -84,6 +84,13 @@ struct TerminalCommandPaletteView: View {
     private var managerOptions: [CommandOption] {
         [
             CommandOption(
+                title: L10n.CommandPalette.sshConnectionsTitle,
+                description: L10n.CommandPalette.sshConnectionsDescription,
+                leadingIcon: "bolt.horizontal.circle"
+            ) {
+                (NSApp.delegate as? AppDelegate)?.showSSHConnections(nil)
+            },
+            CommandOption(
                 title: L10n.CommandPalette.aiManagerTitle,
                 description: L10n.CommandPalette.aiManagerDescription,
                 leadingIcon: "sparkles.rectangle.stack"

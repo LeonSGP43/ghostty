@@ -242,6 +242,44 @@ struct AITerminalManagerTests {
         #expect(credentialStore.passwords["ssh:buildbox"] == nil)
     }
 
+    @Test @MainActor func storeKeepsExistingPasswordWhenEditingWithoutNewPassword() {
+        let tempURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathExtension("json")
+        let credentialStore = MockSSHConnectionCredentialStore()
+
+        let store = AITerminalManagerStore(
+            appDelegateProvider: { nil },
+            configurationURL: tempURL,
+            credentialStore: credentialStore
+        )
+
+        store.saveHost(
+            name: "Buildbox",
+            sshAlias: "buildbox",
+            hostname: "",
+            user: "deploy",
+            port: "22",
+            defaultDirectory: "",
+            authMode: .password,
+            password: "secret"
+        )
+        store.saveHost(
+            existingHostID: "ssh:buildbox",
+            name: "Buildbox Prod",
+            sshAlias: "buildbox",
+            hostname: "",
+            user: "deploy",
+            port: "22",
+            defaultDirectory: "/srv/prod",
+            authMode: .password,
+            password: ""
+        )
+
+        #expect(store.configuration.savedHosts.first?.name == "Buildbox Prod")
+        #expect(credentialStore.passwords["ssh:buildbox"] == "secret")
+    }
+
     @Test func taskStateLocalizationSupportsEnglishAndChinese() {
         #expect(
             AppLocalization.localizedString(

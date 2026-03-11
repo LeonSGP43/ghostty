@@ -92,6 +92,12 @@ struct AppLocalizationTests {
         )
         #expect(
             AppLocalization.localizedText(
+                "Connections…",
+                preferredLanguages: ["zh-Hans"]
+            ) == "连接中心…"
+        )
+        #expect(
+            AppLocalization.localizedText(
                 "Enable window decorations to use tabs",
                 preferredLanguages: ["zh-Hans"]
             ) == "启用窗口装饰后才能使用标签页"
@@ -102,6 +108,21 @@ struct AppLocalizationTests {
                 preferredLanguages: ["zh-Hans"],
                 arguments: [4]
             ) == "记住我的决定 4 小时"
+        )
+    }
+
+    @Test func sshConnectionsCommandPaletteStringsAreLocalized() {
+        #expect(
+            AppLocalization.localizedString(
+                "command_palette.ssh_connections.title",
+                preferredLanguages: ["en-US"]
+            ) == "Open: Connections"
+        )
+        #expect(
+            AppLocalization.localizedString(
+                "command_palette.ssh_connections.title",
+                preferredLanguages: ["zh-Hans"]
+            ) == "打开：连接中心"
         )
     }
 

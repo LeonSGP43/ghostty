@@ -22,6 +22,8 @@ enum AppLocalization {
         "common.untitled": "Untitled",
         "command_palette.ai_manager.title": "Open: AI Terminal Manager",
         "command_palette.ai_manager.description": "Show the Phase 1 Ghostty + Shannon control center scaffold.",
+        "command_palette.ssh_connections.title": "Open: Connections",
+        "command_palette.ssh_connections.description": "Manage saved SSH connections and jump back to active remote tabs.",
         "command_palette.update.restart": "Update Ghostty and Restart",
         "command_palette.update.cancel": "Cancel or Skip Update",
         "command_palette.update.cancel.description": "Dismiss the current update process",
@@ -152,6 +154,21 @@ enum AppLocalization {
         "ai.manager.task.session_closed": "Session closed before task completed.",
         "ai.manager.task.manage_session": "Manage %@",
         "ai.manager.task.default_title": "Managed Terminal Task",
+        "ssh.connections.window.title": "Connections",
+        "ssh.connections.title": "Connections",
+        "ssh.connections.subtitle": "Save SSH connections, reuse passwords from Keychain, and jump back into active remote sessions.",
+        "ssh.connections.new": "New Connection",
+        "ssh.connections.save": "Save Connection",
+        "ssh.connections.update": "Update Connection",
+        "ssh.connections.authentication": "Authentication",
+        "ssh.connections.authentication.system": "System SSH",
+        "ssh.connections.authentication.password": "Saved Password",
+        "ssh.connections.password": "Password",
+        "ssh.connections.password.stored": "A password is already stored in Keychain. Leave this blank to keep it.",
+        "ssh.connections.password.not_stored": "No password is currently stored in Keychain for this connection.",
+        "ssh.connections.active_sessions": "Active Remote Sessions",
+        "ssh.connections.active_sessions.empty": "No active remote sessions yet.",
+        "ssh.connections.reconnect": "Reconnect",
         "ssh.connections.error.password_required": "Password is required when using Saved Password authentication.",
         "ssh.connections.error.password_missing": "No saved password was found for this connection. Edit the connection and save the password again.",
         "ssh.connections.error.password_save_failed": "Failed to save the SSH password to Keychain: %@",
@@ -173,6 +190,7 @@ enum AppLocalization {
         "settings.body": "Language can be configured here. For advanced terminal settings, edit $HOME/.config/ghostty/config.ghostty and restart Ghostty.",
         "settings.language.title": "App Language",
         "AI Terminal Manager…": "AI Terminal Manager…",
+        "Connections…": "Connections…",
         "settings.language.description": "Choose a language override for Ghostty. Restart is required for menus, App Intents, and all localized resources to update consistently.",
         "settings.language.option.system": "System",
         "settings.language.option.english": "English",
@@ -203,6 +221,8 @@ enum AppLocalization {
         "common.untitled": "未命名",
         "command_palette.ai_manager.title": "打开：AI Terminal Manager",
         "command_palette.ai_manager.description": "打开 Ghostty + Shannon Phase 1 控制中心原型。",
+        "command_palette.ssh_connections.title": "打开：连接中心",
+        "command_palette.ssh_connections.description": "管理已保存的 SSH 连接，并快速回到活动中的远程标签页。",
         "command_palette.update.restart": "更新 Ghostty 并重启",
         "command_palette.update.cancel": "取消或跳过更新",
         "command_palette.update.cancel.description": "关闭当前更新流程",
@@ -333,6 +353,21 @@ enum AppLocalization {
         "ai.manager.task.session_closed": "会话在任务完成前已关闭。",
         "ai.manager.task.manage_session": "托管 %@",
         "ai.manager.task.default_title": "托管终端任务",
+        "ssh.connections.window.title": "连接中心",
+        "ssh.connections.title": "连接中心",
+        "ssh.connections.subtitle": "保存 SSH 连接、复用 Keychain 密码，并快速回到活动中的远程会话。",
+        "ssh.connections.new": "新建连接",
+        "ssh.connections.save": "保存连接",
+        "ssh.connections.update": "更新连接",
+        "ssh.connections.authentication": "认证方式",
+        "ssh.connections.authentication.system": "系统 SSH",
+        "ssh.connections.authentication.password": "保存密码",
+        "ssh.connections.password": "密码",
+        "ssh.connections.password.stored": "Keychain 中已保存密码。留空即可保留现有密码。",
+        "ssh.connections.password.not_stored": "当前连接在 Keychain 中还没有保存密码。",
+        "ssh.connections.active_sessions": "活动远程会话",
+        "ssh.connections.active_sessions.empty": "当前还没有活动中的远程会话。",
+        "ssh.connections.reconnect": "重新连接",
         "ssh.connections.error.password_required": "使用“保存密码”认证时必须填写密码。",
         "ssh.connections.error.password_missing": "当前连接没有已保存密码。请编辑该连接并重新保存密码。",
         "ssh.connections.error.password_save_failed": "保存 SSH 密码到 Keychain 失败：%@",
@@ -354,6 +389,7 @@ enum AppLocalization {
         "settings.body": "这里目前可配置应用语言。若要修改高级终端配置，请编辑 $HOME/.config/ghostty/config.ghostty，然后重启 Ghostty。",
         "settings.language.title": "应用语言",
         "AI Terminal Manager…": "AI 终端管理器…",
+        "Connections…": "连接中心…",
         "settings.language.description": "为 Ghostty 选择语言覆盖设置。为了让菜单、App Intents 和所有本地化资源一致更新，需要重启应用。",
         "settings.language.option.system": "跟随系统",
         "settings.language.option.english": "English",
@@ -385,6 +421,7 @@ enum AppLocalization {
         "Check for Updates...": "检查更新...",
         "Preferences…": "偏好设置…",
         "AI Terminal Manager…": "AI 终端管理器…",
+        "Connections…": "连接中心…",
         "Reload Configuration": "重新加载配置",
         "Secure Keyboard Entry": "安全键盘输入",
         "Make Ghostty the Default Terminal": "将 Ghostty 设为默认终端",
@@ -859,6 +896,8 @@ enum L10n {
     enum CommandPalette {
         nonisolated static var aiManagerTitle: String { AppLocalization.localizedString("command_palette.ai_manager.title") }
         nonisolated static var aiManagerDescription: String { AppLocalization.localizedString("command_palette.ai_manager.description") }
+        nonisolated static var sshConnectionsTitle: String { AppLocalization.localizedString("command_palette.ssh_connections.title") }
+        nonisolated static var sshConnectionsDescription: String { AppLocalization.localizedString("command_palette.ssh_connections.description") }
         nonisolated static var updateRestart: String { AppLocalization.localizedString("command_palette.update.restart") }
         nonisolated static var updateCancel: String { AppLocalization.localizedString("command_palette.update.cancel") }
         nonisolated static var updateCancelDescription: String { AppLocalization.localizedString("command_palette.update.cancel.description") }
@@ -930,6 +969,21 @@ enum L10n {
     }
 
     enum SSHConnections {
+        nonisolated static var windowTitle: String { AppLocalization.localizedString("ssh.connections.window.title") }
+        nonisolated static var title: String { AppLocalization.localizedString("ssh.connections.title") }
+        nonisolated static var subtitle: String { AppLocalization.localizedString("ssh.connections.subtitle") }
+        nonisolated static var newConnection: String { AppLocalization.localizedString("ssh.connections.new") }
+        nonisolated static var saveConnection: String { AppLocalization.localizedString("ssh.connections.save") }
+        nonisolated static var updateConnection: String { AppLocalization.localizedString("ssh.connections.update") }
+        nonisolated static var authentication: String { AppLocalization.localizedString("ssh.connections.authentication") }
+        nonisolated static var authModeSystem: String { AppLocalization.localizedString("ssh.connections.authentication.system") }
+        nonisolated static var authModePassword: String { AppLocalization.localizedString("ssh.connections.authentication.password") }
+        nonisolated static var password: String { AppLocalization.localizedString("ssh.connections.password") }
+        nonisolated static var passwordStored: String { AppLocalization.localizedString("ssh.connections.password.stored") }
+        nonisolated static var passwordNotStored: String { AppLocalization.localizedString("ssh.connections.password.not_stored") }
+        nonisolated static var activeSessions: String { AppLocalization.localizedString("ssh.connections.active_sessions") }
+        nonisolated static var activeSessionsEmpty: String { AppLocalization.localizedString("ssh.connections.active_sessions.empty") }
+        nonisolated static var reconnect: String { AppLocalization.localizedString("ssh.connections.reconnect") }
         nonisolated static var passwordRequired: String { AppLocalization.localizedString("ssh.connections.error.password_required") }
         nonisolated static var passwordMissing: String { AppLocalization.localizedString("ssh.connections.error.password_missing") }
         nonisolated static func passwordSaveFailed(_ message: String) -> String { AppLocalization.localizedString("ssh.connections.error.password_save_failed", message) }
