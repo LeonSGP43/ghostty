@@ -4,6 +4,15 @@ import SwiftUI
 final class SSHConnectionsController: NSWindowController, NSWindowDelegate {
     private let store: AITerminalManagerStore
 
+    static func windowsAreInSameTabGroup(_ lhs: NSWindow?, _ rhs: NSWindow?) -> Bool {
+        guard
+            let lhsGroup = lhs?.tabGroup,
+            let rhsGroup = rhs?.tabGroup
+        else { return false }
+
+        return lhsGroup === rhsGroup
+    }
+
     init(store: AITerminalManagerStore) {
         self.store = store
 
@@ -45,8 +54,10 @@ final class SSHConnectionsController: NSWindowController, NSWindowDelegate {
                 parentWindow.deminiaturize(nil)
             }
 
-            let sameTabGroup = window.tabGroup === parentWindow.tabGroup
-            if !sameTabGroup && window.tabbingMode != .disallowed {
+            let sameTabGroup = Self.windowsAreInSameTabGroup(window, parentWindow)
+            if !sameTabGroup &&
+                parentWindow.tabbingMode != .disallowed &&
+                window.tabbingMode != .disallowed {
                 _ = parentWindow.addTabbedWindowSafely(window, ordered: .above)
             }
         }
