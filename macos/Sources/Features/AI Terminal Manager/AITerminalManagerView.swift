@@ -96,8 +96,19 @@ struct AITerminalManagerView: View {
     private var hostsSection: some View {
         GroupBox(L10n.AITerminalManager.hosts) {
             VStack(alignment: .leading, spacing: 10) {
-                Button(L10n.AITerminalManager.openLocalShell) {
-                    store.openLocalShell()
+                HStack {
+                    Button(L10n.AITerminalManager.openLocalShell) {
+                        store.openLocalShell()
+                    }
+                    Button(L10n.AITerminalManager.reloadSSHConfig) {
+                        store.reloadImportedSSHHosts()
+                    }
+                    Spacer()
+                    if editingHostID != nil {
+                        Button(L10n.AITerminalManager.newSSHHost) {
+                            resetHostEditor()
+                        }
+                    }
                 }
 
                 Divider()
@@ -106,8 +117,14 @@ struct AITerminalManagerView: View {
                     .textFieldStyle(.roundedBorder)
 
                 VStack(alignment: .leading, spacing: 8) {
-                    Text(L10n.AITerminalManager.addSSHHost)
+                    Text(hostEditorTitle)
                         .font(.headline)
+
+                    if let hostEditorSourceDescription {
+                        Text(hostEditorSourceDescription)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
 
                     TextField(L10n.AITerminalManager.displayName, text: $hostName)
                     TextField(L10n.AITerminalManager.sshAlias, text: $hostAlias)
@@ -116,7 +133,7 @@ struct AITerminalManagerView: View {
                     TextField(L10n.AITerminalManager.port, text: $hostPort)
                     TextField(L10n.AITerminalManager.defaultDirectory, text: $hostDefaultDirectory)
 
-                    Button(L10n.AITerminalManager.saveHost) {
+                    Button(hostEditorSaveTitle) {
                         store.saveHost(
                             existingHostID: editingHostID,
                             name: hostName,
@@ -293,6 +310,20 @@ struct AITerminalManagerView: View {
         hostUser = ""
         hostPort = ""
         hostDefaultDirectory = ""
+    }
+
+    private var hostEditorTitle: String {
+        editingHostID == nil ? L10n.AITerminalManager.addSSHHost : L10n.AITerminalManager.editSSHHost
+    }
+
+    private var hostEditorSaveTitle: String {
+        editingHostID == nil ? L10n.AITerminalManager.saveHost : L10n.AITerminalManager.updateHost
+    }
+
+    private var hostEditorSourceDescription: String? {
+        guard let editingHostID else { return nil }
+        guard let host = store.availableHosts.first(where: { $0.id == editingHostID }) else { return nil }
+        return hostSourceLabel(for: host)
     }
 
     private var filteredRecentHosts: [AITerminalHost] {

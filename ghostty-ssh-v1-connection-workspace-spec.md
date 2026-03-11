@@ -102,11 +102,18 @@ V1 只支持这些字段。
 
 SSH 工作台 UI 先保留在当前 AI Terminal Manager 内，但主机区域改成连接工作台式结构：
 
+- Host Actions
 - Search
 - Recent
 - Saved Hosts
 - Imported SSH Config Hosts
 - Host Editor
+
+`Host Actions` 包含：
+
+- Open Local Shell
+- Reload SSH Config
+- New Host（编辑中时可快速退出编辑）
 
 ### 2. Interactions
 

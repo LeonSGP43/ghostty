@@ -36,7 +36,10 @@ enum AppLocalization {
         "ai.manager.supervisor.stop": "Stop Supervisor",
         "ai.manager.hosts": "Hosts",
         "ai.manager.hosts.open_local_shell": "Open Local Shell",
+        "ai.manager.hosts.reload_ssh_config": "Reload SSH Config",
         "ai.manager.hosts.add_ssh_host": "Add SSH Host",
+        "ai.manager.hosts.new_ssh_host": "New Host",
+        "ai.manager.hosts.edit_ssh_host": "Edit SSH Host",
         "ai.manager.hosts.display_name": "Display Name",
         "ai.manager.hosts.ssh_alias": "SSH Alias",
         "ai.manager.hosts.hostname": "Hostname (optional if alias works)",
@@ -44,6 +47,7 @@ enum AppLocalization {
         "ai.manager.hosts.port": "Port",
         "ai.manager.hosts.default_directory": "Default Directory",
         "ai.manager.hosts.save": "Save Host",
+        "ai.manager.hosts.update": "Update Host",
         "ai.manager.hosts.empty": "No hosts configured yet.",
         "ai.manager.hosts.search": "Search SSH Hosts",
         "ai.manager.hosts.recent": "Recent",
@@ -193,7 +197,10 @@ enum AppLocalization {
         "ai.manager.supervisor.stop": "停止主控进程",
         "ai.manager.hosts": "主机",
         "ai.manager.hosts.open_local_shell": "打开本地 Shell",
+        "ai.manager.hosts.reload_ssh_config": "重新加载 SSH 配置",
         "ai.manager.hosts.add_ssh_host": "添加 SSH 主机",
+        "ai.manager.hosts.new_ssh_host": "新建主机",
+        "ai.manager.hosts.edit_ssh_host": "编辑 SSH 主机",
         "ai.manager.hosts.display_name": "显示名称",
         "ai.manager.hosts.ssh_alias": "SSH 别名",
         "ai.manager.hosts.hostname": "主机名（如果别名可用可不填）",
@@ -201,6 +208,7 @@ enum AppLocalization {
         "ai.manager.hosts.port": "端口",
         "ai.manager.hosts.default_directory": "默认目录",
         "ai.manager.hosts.save": "保存主机",
+        "ai.manager.hosts.update": "更新主机",
         "ai.manager.hosts.empty": "还没有配置任何主机。",
         "ai.manager.hosts.search": "搜索 SSH 主机",
         "ai.manager.hosts.recent": "最近连接",
@@ -892,7 +900,10 @@ enum L10n {
         nonisolated static var stopSupervisor: String { AppLocalization.localizedString("ai.manager.supervisor.stop") }
         nonisolated static var hosts: String { AppLocalization.localizedString("ai.manager.hosts") }
         nonisolated static var openLocalShell: String { AppLocalization.localizedString("ai.manager.hosts.open_local_shell") }
+        nonisolated static var reloadSSHConfig: String { AppLocalization.localizedString("ai.manager.hosts.reload_ssh_config") }
         nonisolated static var addSSHHost: String { AppLocalization.localizedString("ai.manager.hosts.add_ssh_host") }
+        nonisolated static var newSSHHost: String { AppLocalization.localizedString("ai.manager.hosts.new_ssh_host") }
+        nonisolated static var editSSHHost: String { AppLocalization.localizedString("ai.manager.hosts.edit_ssh_host") }
         nonisolated static var displayName: String { AppLocalization.localizedString("ai.manager.hosts.display_name") }
         nonisolated static var sshAlias: String { AppLocalization.localizedString("ai.manager.hosts.ssh_alias") }
         nonisolated static var hostname: String { AppLocalization.localizedString("ai.manager.hosts.hostname") }
@@ -900,6 +911,7 @@ enum L10n {
         nonisolated static var port: String { AppLocalization.localizedString("ai.manager.hosts.port") }
         nonisolated static var defaultDirectory: String { AppLocalization.localizedString("ai.manager.hosts.default_directory") }
         nonisolated static var saveHost: String { AppLocalization.localizedString("ai.manager.hosts.save") }
+        nonisolated static var updateHost: String { AppLocalization.localizedString("ai.manager.hosts.update") }
         nonisolated static var hostsEmpty: String { AppLocalization.localizedString("ai.manager.hosts.empty") }
         nonisolated static var searchHosts: String { AppLocalization.localizedString("ai.manager.hosts.search") }
         nonisolated static var recentHosts: String { AppLocalization.localizedString("ai.manager.hosts.recent") }
