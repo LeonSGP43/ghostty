@@ -142,6 +142,7 @@ class AppDelegate: NSObject,
     )
 
     @MainActor lazy var aiTerminalManagerController = AITerminalManagerController(
+        ghostty,
         store: aiTerminalManagerStore
     )
 
