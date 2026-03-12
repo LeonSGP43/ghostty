@@ -52,7 +52,10 @@ final class ShannonSupervisor {
         }
     }
 
-    func start(configuration: ShannonSupervisorConfiguration) {
+    func start(
+        configuration: ShannonSupervisorConfiguration,
+        workingDirectoryURL: URL? = nil
+    ) {
         guard process == nil else { return }
         guard configuration.isLaunchable else {
             state = .unavailable
@@ -64,15 +67,11 @@ final class ShannonSupervisor {
             return
         }
 
-        guard let binaryPath = configuration.binaryPath else {
-            state = .unavailable
-            return
-        }
-
         let process = Process()
-        process.executableURL = URL(fileURLWithPath: binaryPath)
-        process.arguments = configuration.resolvedArguments
+        process.executableURL = URL(fileURLWithPath: configuration.resolvedLaunchExecutable)
+        process.arguments = configuration.resolvedLaunchArguments
         process.environment = ProcessInfo.processInfo.environment.merging(configuration.environment, uniquingKeysWith: { _, new in new })
+        process.currentDirectoryURL = workingDirectoryURL
 
         process.terminationHandler = { [weak self] process in
             Task { @MainActor in

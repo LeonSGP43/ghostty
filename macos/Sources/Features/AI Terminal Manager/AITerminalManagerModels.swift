@@ -252,72 +252,184 @@ struct AITerminalWorkspaceTemplate: Identifiable, Codable, Hashable, Sendable {
     var directory: String
 }
 
+enum ShannonRuntimeMode: String, Codable, CaseIterable, Identifiable, Sendable {
+    case embedded
+    case externalShan = "external_shan"
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .embedded:
+            L10n.AITerminalManager.runtimeModeEmbedded
+        case .externalShan:
+            L10n.AITerminalManager.runtimeModeExternalShan
+        }
+    }
+
+    var description: String {
+        switch self {
+        case .embedded:
+            L10n.AITerminalManager.runtimeModeEmbeddedDescription
+        case .externalShan:
+            L10n.AITerminalManager.runtimeModeExternalShanDescription
+        }
+    }
+}
+
+enum ShannonModelTier: String, Codable, CaseIterable, Identifiable, Sendable {
+    case small
+    case medium
+    case large
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .small:
+            L10n.AITerminalManager.modelTierSmall
+        case .medium:
+            L10n.AITerminalManager.modelTierMedium
+        case .large:
+            L10n.AITerminalManager.modelTierLarge
+        }
+    }
+}
+
+struct ShannonGatewayConfiguration: Codable, Hashable, Sendable {
+    var endpoint: String
+    var apiKey: String
+    var modelTier: ShannonModelTier
+    var modelName: String
+
+    init(
+        endpoint: String = ProcessInfo.processInfo.environment["GHOSTTY_SHANNON_ENDPOINT"]
+            ?? "https://api-dev.shannon.run",
+        apiKey: String = ProcessInfo.processInfo.environment["GHOSTTY_SHANNON_API_KEY"] ?? "",
+        modelTier: ShannonModelTier = ShannonModelTier(
+            rawValue: ProcessInfo.processInfo.environment["GHOSTTY_SHANNON_MODEL_TIER"] ?? ""
+        ) ?? .medium,
+        modelName: String = ProcessInfo.processInfo.environment["GHOSTTY_SHANNON_MODEL"] ?? ""
+    ) {
+        self.endpoint = endpoint
+        self.apiKey = apiKey
+        self.modelTier = modelTier
+        self.modelName = modelName
+    }
+
+    var trimmedEndpoint: String {
+        endpoint.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var trimmedModelName: String {
+        modelName.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var modelSummary: String {
+        if !trimmedModelName.isEmpty {
+            return "\(modelTier.rawValue) · \(trimmedModelName)"
+        }
+        return modelTier.rawValue
+    }
+
+    var maskedAPIKey: String {
+        let trimmed = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return "—" }
+        guard trimmed.count > 8 else { return "••••" }
+        return "\(trimmed.prefix(4))••••\(trimmed.suffix(4))"
+    }
+}
+
 struct ShannonSupervisorConfiguration: Codable, Hashable, Sendable {
+    var runtimeMode: ShannonRuntimeMode
     var binaryPath: String?
     var arguments: [String]
     var autoStart: Bool
     var environment: [String: String]
     var controlURL: String?
     var requestTimeoutSeconds: Int
+    var gateway: ShannonGatewayConfiguration
 
     init(
+        runtimeMode: ShannonRuntimeMode? = nil,
         binaryPath: String? = ProcessInfo.processInfo.environment["GHOSTTY_SHANNON_PATH"],
         arguments: [String] = [],
         autoStart: Bool = false,
         environment: [String: String] = [:],
         controlURL: String? = ProcessInfo.processInfo.environment["GHOSTTY_SHANNON_CONTROL_URL"],
-        requestTimeoutSeconds: Int = 2
+        requestTimeoutSeconds: Int = 2,
+        gateway: ShannonGatewayConfiguration = .init()
     ) {
+        let inferredMode: ShannonRuntimeMode
+        if let runtimeMode {
+            inferredMode = runtimeMode
+        } else if let binaryPath,
+                  !binaryPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            inferredMode = .externalShan
+        } else {
+            inferredMode = .embedded
+        }
+        self.runtimeMode = inferredMode
         self.binaryPath = binaryPath
         self.arguments = arguments
         self.autoStart = autoStart
         self.environment = environment
         self.controlURL = controlURL
         self.requestTimeoutSeconds = requestTimeoutSeconds
+        self.gateway = gateway
     }
 
     enum CodingKeys: String, CodingKey {
+        case runtimeMode
         case binaryPath
         case arguments
         case autoStart
         case environment
         case controlURL
         case requestTimeoutSeconds
+        case gateway
     }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        binaryPath = try container.decodeIfPresent(String.self, forKey: .binaryPath)
+        let decodedBinaryPath = try container.decodeIfPresent(String.self, forKey: .binaryPath)
+        binaryPath = decodedBinaryPath
+        runtimeMode = try container.decodeIfPresent(ShannonRuntimeMode.self, forKey: .runtimeMode)
+            ?? {
+                guard let decodedBinaryPath,
+                      !decodedBinaryPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                    return .embedded
+                }
+                return .externalShan
+            }()
         arguments = try container.decodeIfPresent([String].self, forKey: .arguments) ?? []
         autoStart = try container.decodeIfPresent(Bool.self, forKey: .autoStart) ?? false
         environment = try container.decodeIfPresent([String: String].self, forKey: .environment) ?? [:]
         controlURL = try container.decodeIfPresent(String.self, forKey: .controlURL)
             ?? ProcessInfo.processInfo.environment["GHOSTTY_SHANNON_CONTROL_URL"]
         requestTimeoutSeconds = try container.decodeIfPresent(Int.self, forKey: .requestTimeoutSeconds) ?? 2
+        gateway = try container.decodeIfPresent(ShannonGatewayConfiguration.self, forKey: .gateway)
+            ?? .init()
     }
 
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(runtimeMode, forKey: .runtimeMode)
         try container.encodeIfPresent(binaryPath, forKey: .binaryPath)
         try container.encode(arguments, forKey: .arguments)
         try container.encode(autoStart, forKey: .autoStart)
         try container.encode(environment, forKey: .environment)
         try container.encodeIfPresent(controlURL, forKey: .controlURL)
         try container.encode(requestTimeoutSeconds, forKey: .requestTimeoutSeconds)
+        try container.encode(gateway, forKey: .gateway)
     }
 
     var isEmbeddedRuntime: Bool {
-        guard let binaryPath else { return true }
-        return binaryPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        runtimeMode == .embedded
     }
 
     var isLaunchable: Bool {
-        if isEmbeddedRuntime {
-            return true
-        }
-
-        guard let binaryPath else { return false }
-        return !binaryPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        true
     }
 
     var resolvedArguments: [String] {
@@ -350,10 +462,62 @@ struct ShannonSupervisorConfiguration: Codable, Hashable, Sendable {
         return URL(string: "http://127.0.0.1:7533")
     }
 
+    var resolvedLaunchExecutable: String {
+        let trimmedBinaryPath = binaryPath?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if trimmedBinaryPath.isEmpty {
+            return "/usr/bin/env"
+        }
+        return trimmedBinaryPath
+    }
+
+    var resolvedLaunchArguments: [String] {
+        if usesPATHLookupForShan {
+            return ["shan"] + resolvedArguments
+        }
+        return resolvedArguments
+    }
+
+    var usesPATHLookupForShan: Bool {
+        guard !isEmbeddedRuntime else { return false }
+        return (binaryPath?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "").isEmpty
+    }
+
+    var runtimeSummary: String {
+        switch runtimeMode {
+        case .embedded:
+            return L10n.AITerminalManager.runtimeModeEmbedded
+        case .externalShan:
+            return L10n.AITerminalManager.runtimeModeExternalShan
+        }
+    }
+
+    var shanOverlayYAML: String {
+        var lines = [
+            "endpoint: \(Self.yamlScalar(gateway.trimmedEndpoint.isEmpty ? "https://api-dev.shannon.run" : gateway.trimmedEndpoint))",
+            "api_key: \(Self.yamlScalar(gateway.apiKey.trimmingCharacters(in: .whitespacesAndNewlines)))",
+            "model_tier: \(gateway.modelTier.rawValue)",
+        ]
+
+        if !gateway.trimmedModelName.isEmpty {
+            lines.append("agent:")
+            lines.append("  model: \(Self.yamlScalar(gateway.trimmedModelName))")
+        }
+
+        return lines.joined(separator: "\n") + "\n"
+    }
+
     private var isLikelyShanBinary: Bool {
+        if usesPATHLookupForShan {
+            return true
+        }
+
         guard let binaryPath else { return false }
         let name = URL(fileURLWithPath: binaryPath).lastPathComponent.lowercased()
         return name == "shan" || name.hasPrefix("shan-")
+    }
+
+    private static func yamlScalar(_ value: String) -> String {
+        "'" + value.replacingOccurrences(of: "'", with: "''") + "'"
     }
 }
 

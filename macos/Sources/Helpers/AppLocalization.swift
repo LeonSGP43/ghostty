@@ -20,20 +20,22 @@ enum AppLocalization {
 
     private static let englishTable: [String: String] = [
         "common.untitled": "Untitled",
-        "command_palette.ai_manager.title": "Open: AI Terminal Manager",
-        "command_palette.ai_manager.description": "Show the Phase 1 Ghostty + Shannon control center scaffold.",
+        "command_palette.ai_manager.title": "Open: Shannon Control Center",
+        "command_palette.ai_manager.description": "Open Ghostty's global Shannon controller.",
         "command_palette.ssh_connections.title": "Open: Connections",
         "command_palette.ssh_connections.description": "Manage saved SSH connections and jump back to active remote tabs.",
         "command_palette.update.restart": "Update Ghostty and Restart",
         "command_palette.update.cancel": "Cancel or Skip Update",
         "command_palette.update.cancel.description": "Dismiss the current update process",
         "command_palette.focus": "Focus: %@",
-        "ai.manager.window.title": "AI Terminal Manager",
-        "ai.manager.title": "AI Terminal Manager",
-        "ai.manager.subtitle": "Ghostty hosts the terminals; Shannon is prepared as the local orchestration supervisor.",
+        "ai.manager.window.title": "Shannon Control Center",
+        "ai.manager.title": "Shannon Control Center",
+        "ai.manager.subtitle": "Shannon now runs as Ghostty's global AI controller. It can observe every tab, propose actions, and wait for approval before changing terminal state.",
         "ai.manager.launch": "Launch",
+        "ai.manager.global_shannon": "Global Shannon",
+        "ai.manager.global_shannon.description": "Use one global Shannon prompt for the whole Ghostty workspace. Shannon will pick the active tab context first, but it can read or take over other tabs when your request calls for it.",
         "ai.manager.supervisor": "Supervisor",
-        "ai.manager.supervisor.hint": "Ghostty now treats Shannon as an embedded local brain by default. An external runtime bridge remains optional when `GHOSTTY_SHANNON_PATH` is set.",
+        "ai.manager.supervisor.hint": "This section shows the live Shannon runtime state. The setup that controls how Shannon runs is now managed above in Global Shannon.",
         "ai.manager.supervisor.start": "Start Supervisor",
         "ai.manager.supervisor.stop": "Stop Supervisor",
         "ai.manager.runtime.endpoint": "Runtime Endpoint",
@@ -42,6 +44,32 @@ enum AppLocalization {
         "ai.manager.runtime.gateway": "Gateway Connection",
         "ai.manager.runtime.active_agent": "Active Agent",
         "ai.manager.runtime.uptime": "Uptime",
+        "ai.manager.runtime.mode.embedded": "Built-in Shannon",
+        "ai.manager.runtime.mode.external_shan": "External shan Runtime",
+        "ai.manager.runtime.mode.embedded.description": "Ghostty runs Shannon inside the app. This is the simplest MVP path and starts automatically.",
+        "ai.manager.runtime.mode.external_shan.description": "Ghostty launches `shan daemon start` and keeps using Ghostty-native approvals and terminal control.",
+        "ai.manager.model_tier.small": "Small",
+        "ai.manager.model_tier.medium": "Medium",
+        "ai.manager.model_tier.large": "Large",
+        "ai.manager.shannon.primary_target": "Primary Tab",
+        "ai.manager.shannon.current_mode": "Current Mode",
+        "ai.manager.shannon.current_model": "Current Model",
+        "ai.manager.shannon.current_endpoint": "Current Endpoint",
+        "ai.manager.shannon.setup": "Shannon Setup",
+        "ai.manager.shannon.runtime_mode": "Runtime Mode",
+        "ai.manager.shannon.binary_path": "shan Binary Path",
+        "ai.manager.shannon.binary_path.hint": "Leave empty to find `shan` from PATH when using external runtime mode.",
+        "ai.manager.shannon.gateway_endpoint": "Gateway Endpoint",
+        "ai.manager.shannon.gateway_api_key": "Gateway API Key",
+        "ai.manager.shannon.model_tier": "Model Tier",
+        "ai.manager.shannon.specific_model": "Specific Model (optional)",
+        "ai.manager.shannon.auto_start": "Start Shannon automatically",
+        "ai.manager.shannon.request_timeout": "Request Timeout (seconds)",
+        "ai.manager.shannon.save_setup": "Save Shannon Setup",
+        "ai.manager.shannon.no_session": "No open tab available",
+        "ai.manager.shannon.no_session_available": "Open or focus a tab before asking Shannon to act globally.",
+        "ai.manager.shannon.embedded_model": "Built-in Ghostty Shannon MVP",
+        "ai.manager.shannon.embedded_endpoint": "Built into Ghostty",
         "ai.manager.shannon.prompt": "Shannon Prompt",
         "ai.manager.shannon.prompt.empty": "Shannon prompt cannot be empty.",
         "ai.manager.shannon.ask": "Ask Shannon",
@@ -124,6 +152,7 @@ enum AppLocalization {
         "ai.manager.send_command": "Send Command",
         "ai.manager.raw_input": "Raw Input",
         "ai.manager.send_input": "Send Input",
+        "ai.manager.session_context": "Session Context",
         "ai.manager.visible_buffer": "Visible Buffer",
         "ai.manager.visible_buffer.empty": "No visible text captured yet.",
         "ai.manager.screen_buffer": "Screen Buffer",
@@ -257,20 +286,22 @@ enum AppLocalization {
 
     private static let simplifiedChineseTable: [String: String] = [
         "common.untitled": "未命名",
-        "command_palette.ai_manager.title": "打开：AI Terminal Manager",
-        "command_palette.ai_manager.description": "打开 Ghostty + Shannon Phase 1 控制中心原型。",
+        "command_palette.ai_manager.title": "打开：Shannon 主控中心",
+        "command_palette.ai_manager.description": "打开 Ghostty 的全局 Shannon 主控。",
         "command_palette.ssh_connections.title": "打开：连接中心",
         "command_palette.ssh_connections.description": "管理已保存的 SSH 连接，并快速回到活动中的远程标签页。",
         "command_palette.update.restart": "更新 Ghostty 并重启",
         "command_palette.update.cancel": "取消或跳过更新",
         "command_palette.update.cancel.description": "关闭当前更新流程",
         "command_palette.focus": "聚焦：%@",
-        "ai.manager.window.title": "AI 终端管理器",
-        "ai.manager.title": "AI 终端管理器",
-        "ai.manager.subtitle": "Ghostty 负责终端宿主；Shannon 作为本地主控编排器预留接入。",
+        "ai.manager.window.title": "Shannon 主控中心",
+        "ai.manager.title": "Shannon 主控中心",
+        "ai.manager.subtitle": "Shannon 现在作为 Ghostty 的全局 AI 主控运行。它可以观察每个 tab、提出动作，并在修改终端状态前等待你的审批。",
         "ai.manager.launch": "启动方式",
+        "ai.manager.global_shannon": "全局 Shannon",
+        "ai.manager.global_shannon.description": "这里是 Ghostty 的全局 Shannon 入口。它会先使用当前活动 tab 作为主上下文，但当你的请求涉及其他 tab 时，也会读取或接管其他 tab。",
         "ai.manager.supervisor": "主控进程",
-        "ai.manager.supervisor.hint": "Ghostty 现在默认把 Shannon 作为内嵌本地主脑运行。只有在设置 `GHOSTTY_SHANNON_PATH` 时，才会启用可选的外部 runtime bridge。",
+        "ai.manager.supervisor.hint": "这里只展示 Shannon 当前运行状态。决定 Shannon 如何运行的设置已经移动到上面的“全局 Shannon”里。",
         "ai.manager.supervisor.start": "启动主控进程",
         "ai.manager.supervisor.stop": "停止主控进程",
         "ai.manager.runtime.endpoint": "运行时地址",
@@ -279,6 +310,32 @@ enum AppLocalization {
         "ai.manager.runtime.gateway": "网关连接",
         "ai.manager.runtime.active_agent": "当前 Agent",
         "ai.manager.runtime.uptime": "运行时长",
+        "ai.manager.runtime.mode.embedded": "内建 Shannon",
+        "ai.manager.runtime.mode.external_shan": "外部 shan Runtime",
+        "ai.manager.runtime.mode.embedded.description": "Ghostty 直接在应用内运行 Shannon。这是最简单的 MVP 路径，默认会自动启动。",
+        "ai.manager.runtime.mode.external_shan.description": "Ghostty 启动 `shan daemon start`，但审批和终端控制仍然走 Ghostty 原生链路。",
+        "ai.manager.model_tier.small": "小",
+        "ai.manager.model_tier.medium": "中",
+        "ai.manager.model_tier.large": "大",
+        "ai.manager.shannon.primary_target": "主目标 Tab",
+        "ai.manager.shannon.current_mode": "当前运行方式",
+        "ai.manager.shannon.current_model": "当前模型",
+        "ai.manager.shannon.current_endpoint": "当前 Endpoint",
+        "ai.manager.shannon.setup": "Shannon 设置",
+        "ai.manager.shannon.runtime_mode": "运行方式",
+        "ai.manager.shannon.binary_path": "shan 二进制路径",
+        "ai.manager.shannon.binary_path.hint": "使用外部 runtime 时可留空，Ghostty 会尝试从 PATH 中查找 `shan`。",
+        "ai.manager.shannon.gateway_endpoint": "网关 Endpoint",
+        "ai.manager.shannon.gateway_api_key": "网关 API Key",
+        "ai.manager.shannon.model_tier": "模型档位",
+        "ai.manager.shannon.specific_model": "指定模型（可选）",
+        "ai.manager.shannon.auto_start": "自动启动 Shannon",
+        "ai.manager.shannon.request_timeout": "请求超时（秒）",
+        "ai.manager.shannon.save_setup": "保存 Shannon 设置",
+        "ai.manager.shannon.no_session": "当前没有可用 tab",
+        "ai.manager.shannon.no_session_available": "请先打开或聚焦一个 tab，再让 Shannon 以全局方式操作。",
+        "ai.manager.shannon.embedded_model": "Ghostty 内建 Shannon MVP",
+        "ai.manager.shannon.embedded_endpoint": "内建于 Ghostty",
         "ai.manager.shannon.prompt": "Shannon 请求",
         "ai.manager.shannon.prompt.empty": "Shannon 请求不能为空。",
         "ai.manager.shannon.ask": "请求 Shannon",
@@ -361,6 +418,7 @@ enum AppLocalization {
         "ai.manager.send_command": "发送命令",
         "ai.manager.raw_input": "原始输入",
         "ai.manager.send_input": "发送输入",
+        "ai.manager.session_context": "Session 上下文",
         "ai.manager.visible_buffer": "可见缓冲区",
         "ai.manager.visible_buffer.empty": "还没有采集到可见文本。",
         "ai.manager.screen_buffer": "整屏缓冲区",
@@ -1083,6 +1141,8 @@ enum L10n {
         nonisolated static var title: String { AppLocalization.localizedString("ai.manager.title") }
         nonisolated static var subtitle: String { AppLocalization.localizedString("ai.manager.subtitle") }
         nonisolated static var launch: String { AppLocalization.localizedString("ai.manager.launch") }
+        nonisolated static var globalShannon: String { AppLocalization.localizedString("ai.manager.global_shannon") }
+        nonisolated static var globalShannonDescription: String { AppLocalization.localizedString("ai.manager.global_shannon.description") }
         nonisolated static var supervisor: String { AppLocalization.localizedString("ai.manager.supervisor") }
         nonisolated static var supervisorHint: String { AppLocalization.localizedString("ai.manager.supervisor.hint") }
         nonisolated static var startSupervisor: String { AppLocalization.localizedString("ai.manager.supervisor.start") }
@@ -1093,6 +1153,32 @@ enum L10n {
         nonisolated static var runtimeGateway: String { AppLocalization.localizedString("ai.manager.runtime.gateway") }
         nonisolated static var runtimeActiveAgent: String { AppLocalization.localizedString("ai.manager.runtime.active_agent") }
         nonisolated static var runtimeUptime: String { AppLocalization.localizedString("ai.manager.runtime.uptime") }
+        nonisolated static var runtimeModeEmbedded: String { AppLocalization.localizedString("ai.manager.runtime.mode.embedded") }
+        nonisolated static var runtimeModeExternalShan: String { AppLocalization.localizedString("ai.manager.runtime.mode.external_shan") }
+        nonisolated static var runtimeModeEmbeddedDescription: String { AppLocalization.localizedString("ai.manager.runtime.mode.embedded.description") }
+        nonisolated static var runtimeModeExternalShanDescription: String { AppLocalization.localizedString("ai.manager.runtime.mode.external_shan.description") }
+        nonisolated static var modelTierSmall: String { AppLocalization.localizedString("ai.manager.model_tier.small") }
+        nonisolated static var modelTierMedium: String { AppLocalization.localizedString("ai.manager.model_tier.medium") }
+        nonisolated static var modelTierLarge: String { AppLocalization.localizedString("ai.manager.model_tier.large") }
+        nonisolated static var shannonPrimaryTarget: String { AppLocalization.localizedString("ai.manager.shannon.primary_target") }
+        nonisolated static var shannonCurrentMode: String { AppLocalization.localizedString("ai.manager.shannon.current_mode") }
+        nonisolated static var shannonCurrentModel: String { AppLocalization.localizedString("ai.manager.shannon.current_model") }
+        nonisolated static var shannonCurrentEndpoint: String { AppLocalization.localizedString("ai.manager.shannon.current_endpoint") }
+        nonisolated static var shannonSetup: String { AppLocalization.localizedString("ai.manager.shannon.setup") }
+        nonisolated static var shannonRuntimeMode: String { AppLocalization.localizedString("ai.manager.shannon.runtime_mode") }
+        nonisolated static var shannonBinaryPath: String { AppLocalization.localizedString("ai.manager.shannon.binary_path") }
+        nonisolated static var shannonBinaryPathHint: String { AppLocalization.localizedString("ai.manager.shannon.binary_path.hint") }
+        nonisolated static var shannonGatewayEndpoint: String { AppLocalization.localizedString("ai.manager.shannon.gateway_endpoint") }
+        nonisolated static var shannonGatewayAPIKey: String { AppLocalization.localizedString("ai.manager.shannon.gateway_api_key") }
+        nonisolated static var shannonModelTier: String { AppLocalization.localizedString("ai.manager.shannon.model_tier") }
+        nonisolated static var shannonSpecificModel: String { AppLocalization.localizedString("ai.manager.shannon.specific_model") }
+        nonisolated static var shannonAutoStart: String { AppLocalization.localizedString("ai.manager.shannon.auto_start") }
+        nonisolated static var shannonRequestTimeout: String { AppLocalization.localizedString("ai.manager.shannon.request_timeout") }
+        nonisolated static var shannonSaveSetup: String { AppLocalization.localizedString("ai.manager.shannon.save_setup") }
+        nonisolated static var shannonNoSession: String { AppLocalization.localizedString("ai.manager.shannon.no_session") }
+        nonisolated static var shannonNoSessionAvailable: String { AppLocalization.localizedString("ai.manager.shannon.no_session_available") }
+        nonisolated static var shannonEmbeddedModelLabel: String { AppLocalization.localizedString("ai.manager.shannon.embedded_model") }
+        nonisolated static var shannonEmbeddedEndpointLabel: String { AppLocalization.localizedString("ai.manager.shannon.embedded_endpoint") }
         nonisolated static var shannonPrompt: String { AppLocalization.localizedString("ai.manager.shannon.prompt") }
         nonisolated static var shannonPromptEmpty: String { AppLocalization.localizedString("ai.manager.shannon.prompt.empty") }
         nonisolated static var askShannon: String { AppLocalization.localizedString("ai.manager.shannon.ask") }
@@ -1175,6 +1261,7 @@ enum L10n {
         nonisolated static var sendCommand: String { AppLocalization.localizedString("ai.manager.send_command") }
         nonisolated static var rawInput: String { AppLocalization.localizedString("ai.manager.raw_input") }
         nonisolated static var sendInput: String { AppLocalization.localizedString("ai.manager.send_input") }
+        nonisolated static var sessionContext: String { AppLocalization.localizedString("ai.manager.session_context") }
         nonisolated static var visibleBuffer: String { AppLocalization.localizedString("ai.manager.visible_buffer") }
         nonisolated static var visibleBufferEmpty: String { AppLocalization.localizedString("ai.manager.visible_buffer.empty") }
         nonisolated static var screenBuffer: String { AppLocalization.localizedString("ai.manager.screen_buffer") }

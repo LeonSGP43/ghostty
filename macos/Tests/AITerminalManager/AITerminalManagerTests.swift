@@ -103,6 +103,16 @@ struct AITerminalManagerTests {
         #expect(configuration.resolvedControlURL == nil)
     }
 
+    @Test func supervisorConfigurationCanLaunchShanFromPATH() {
+        let configuration = ShannonSupervisorConfiguration(runtimeMode: .externalShan)
+
+        #expect(configuration.isEmbeddedRuntime == false)
+        #expect(configuration.usesPATHLookupForShan)
+        #expect(configuration.resolvedLaunchExecutable == "/usr/bin/env")
+        #expect(configuration.resolvedLaunchArguments == ["shan", "daemon", "start"])
+        #expect(configuration.resolvedControlURL?.absoluteString == "http://127.0.0.1:7533")
+    }
+
     @Test func supervisorConfigurationPreservesExplicitBridgeOverrides() {
         let configuration = ShannonSupervisorConfiguration(
             binaryPath: "/usr/local/bin/shan",
@@ -114,6 +124,63 @@ struct AITerminalManagerTests {
         #expect(configuration.resolvedArguments == ["daemon", "start", "--verbose"])
         #expect(configuration.resolvedControlURL?.absoluteString == "http://127.0.0.1:9000")
         #expect(configuration.requestTimeoutSeconds == 5)
+    }
+
+    @Test func supervisorConfigurationBuildsShanOverlayYAML() {
+        let configuration = ShannonSupervisorConfiguration(
+            runtimeMode: .externalShan,
+            gateway: ShannonGatewayConfiguration(
+                endpoint: "https://gateway.example.com",
+                apiKey: "sk-test-1234",
+                modelTier: .large,
+                modelName: "gpt-5"
+            )
+        )
+
+        #expect(configuration.shanOverlayYAML.contains("endpoint: 'https://gateway.example.com'"))
+        #expect(configuration.shanOverlayYAML.contains("api_key: 'sk-test-1234'"))
+        #expect(configuration.shanOverlayYAML.contains("model_tier: large"))
+        #expect(configuration.shanOverlayYAML.contains("model: 'gpt-5'"))
+    }
+
+    @Test func preferredShannonSessionFallsBackFromSelectedToFocused() {
+        let focusedID = UUID()
+        let otherID = UUID()
+        let sessions = [
+            AITerminalSessionSummary(
+                id: otherID,
+                title: "Other",
+                workingDirectory: nil,
+                isFocused: false,
+                hostID: AITerminalHost.local.id,
+                hostLabel: "This Mac",
+                workspaceID: nil,
+                managedState: .manual,
+                taskID: nil,
+                taskTitle: nil,
+                taskState: nil
+            ),
+            AITerminalSessionSummary(
+                id: focusedID,
+                title: "Focused",
+                workingDirectory: nil,
+                isFocused: true,
+                hostID: AITerminalHost.local.id,
+                hostLabel: "This Mac",
+                workspaceID: nil,
+                managedState: .managedActive,
+                taskID: nil,
+                taskTitle: nil,
+                taskState: nil
+            ),
+        ]
+
+        let resolved = AITerminalManagerStore.preferredShannonSession(
+            selectedSessionID: UUID(),
+            sessions: sessions
+        )
+
+        #expect(resolved?.id == focusedID)
     }
 
     @Test func shannonPromptIncludesSessionContext() {

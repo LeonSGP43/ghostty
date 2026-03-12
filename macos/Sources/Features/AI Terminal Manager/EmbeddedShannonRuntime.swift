@@ -160,9 +160,9 @@ actor EmbeddedShannonRuntime {
         ShannonRuntimeStatus(
             baseURL: "embedded://ghostty-shannon",
             health: .healthy,
-            version: "embedded",
+            version: "ghostty-embedded",
             gatewayConnected: nil,
-            activeAgent: "embedded-shannon",
+            activeAgent: "ghostty-global-shannon",
             uptimeSeconds: Int(Date.now.timeIntervalSince(bootDate))
         )
     }
@@ -215,7 +215,7 @@ actor EmbeddedShannonRuntime {
                 ShannonBridgeRunResult(
                     reply: plan.analysisReply,
                     sessionID: request.session.id.uuidString,
-                    agent: "embedded-shannon"
+                    agent: "ghostty-global-shannon"
                 )
             ))
             return
@@ -299,7 +299,7 @@ actor EmbeddedShannonRuntime {
                     prefersChinese: plan.prefersChinese
                 ),
                 sessionID: activeSessionID.uuidString,
-                agent: "embedded-shannon"
+                agent: "ghostty-global-shannon"
             )
         ))
     }

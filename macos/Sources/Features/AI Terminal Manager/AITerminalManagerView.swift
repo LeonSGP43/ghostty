@@ -17,12 +17,26 @@ struct AITerminalManagerView: View {
     @State private var sessionCommand = ""
     @State private var sessionInput = ""
     @State private var shannonPrompt = ""
+    @State private var shannonRuntimeMode: ShannonRuntimeMode = .embedded
+    @State private var shannonBinaryPath = ""
+    @State private var shannonControlURL = ""
+    @State private var shannonEndpoint = ""
+    @State private var shannonAPIKey = ""
+    @State private var shannonModelTier: ShannonModelTier = .medium
+    @State private var shannonModelName = ""
+    @State private var shannonAutoStart = false
+    @State private var shannonTimeoutSeconds = "2"
+    @State private var showsSessionContext = false
 
     var body: some View {
         ScrollView([.horizontal, .vertical]) {
             content
         }
         .frame(minWidth: 1120, minHeight: 760)
+        .onAppear(perform: syncShannonSetupFromStore)
+        .onChange(of: store.configuration.supervisor) { _ in
+            syncShannonSetupFromStore()
+        }
     }
 
     private var content: some View {
@@ -34,6 +48,8 @@ struct AITerminalManagerView: View {
                     .foregroundStyle(.red)
                     .font(.callout)
             }
+
+            globalShannonSection
 
             HStack(alignment: .top, spacing: 16) {
                 VStack(alignment: .leading, spacing: 16) {
@@ -75,6 +91,180 @@ struct AITerminalManagerView: View {
         }
     }
 
+    private var globalShannonSection: some View {
+        GroupBox(L10n.AITerminalManager.globalShannon) {
+            VStack(alignment: .leading, spacing: 14) {
+                Text(L10n.AITerminalManager.globalShannonDescription)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+
+                HStack(alignment: .top, spacing: 16) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        detailLine(
+                            label: L10n.AITerminalManager.shannonPrimaryTarget,
+                            value: store.shannonPrimarySessionLabel
+                        )
+                        detailLine(
+                            label: L10n.AITerminalManager.shannonCurrentMode,
+                            value: store.shannonModeLabel
+                        )
+                        detailLine(
+                            label: L10n.AITerminalManager.shannonCurrentModel,
+                            value: store.shannonModelLabel
+                        )
+                        detailLine(
+                            label: L10n.AITerminalManager.shannonCurrentEndpoint,
+                            value: store.shannonEndpointLabel
+                        )
+                    }
+
+                    Spacer()
+
+                    Text(store.shannonStatusText)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Divider()
+
+                VStack(alignment: .leading, spacing: 10) {
+                    Text(L10n.AITerminalManager.shannonSetup)
+                        .font(.headline)
+
+                    Picker(L10n.AITerminalManager.shannonRuntimeMode, selection: $shannonRuntimeMode) {
+                        ForEach(ShannonRuntimeMode.allCases) { mode in
+                            Text(mode.displayName).tag(mode)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+
+                    Text(shannonRuntimeMode.description)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    if shannonRuntimeMode == .externalShan {
+                        VStack(alignment: .leading, spacing: 8) {
+                            TextField(L10n.AITerminalManager.shannonBinaryPath, text: $shannonBinaryPath)
+                                .textFieldStyle(.roundedBorder)
+                            Text(L10n.AITerminalManager.shannonBinaryPathHint)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+
+                            TextField(L10n.AITerminalManager.runtimeEndpoint, text: $shannonControlURL)
+                                .textFieldStyle(.roundedBorder)
+                            TextField(L10n.AITerminalManager.shannonGatewayEndpoint, text: $shannonEndpoint)
+                                .textFieldStyle(.roundedBorder)
+                            SecureField(L10n.AITerminalManager.shannonGatewayAPIKey, text: $shannonAPIKey)
+                                .textFieldStyle(.roundedBorder)
+
+                            HStack {
+                                Picker(L10n.AITerminalManager.shannonModelTier, selection: $shannonModelTier) {
+                                    ForEach(ShannonModelTier.allCases) { tier in
+                                        Text(tier.displayName).tag(tier)
+                                    }
+                                }
+                                .frame(maxWidth: 220)
+
+                                TextField(L10n.AITerminalManager.shannonSpecificModel, text: $shannonModelName)
+                                    .textFieldStyle(.roundedBorder)
+                            }
+                        }
+                    }
+
+                    HStack(spacing: 12) {
+                        Toggle(L10n.AITerminalManager.shannonAutoStart, isOn: $shannonAutoStart)
+                        TextField(L10n.AITerminalManager.shannonRequestTimeout, text: $shannonTimeoutSeconds)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 160)
+                    }
+
+                    HStack {
+                        Button(L10n.AITerminalManager.shannonSaveSetup) {
+                            store.saveShannonSetup(composeShannonSupervisorConfiguration())
+                        }
+                        Button(L10n.AITerminalManager.startSupervisor) {
+                            store.saveShannonSetup(composeShannonSupervisorConfiguration())
+                            store.startSupervisor()
+                        }
+                        Button(L10n.AITerminalManager.stopSupervisor) {
+                            store.stopSupervisor()
+                        }
+                        Spacer()
+                        Button(L10n.AITerminalManager.refreshSnapshot) {
+                            store.refresh()
+                        }
+                    }
+                }
+
+                Divider()
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(L10n.AITerminalManager.shannonPrompt)
+                        .font(.headline)
+                    TextEditor(text: $shannonPrompt)
+                        .font(.system(.body, design: .monospaced))
+                        .frame(minHeight: 92, maxHeight: 140)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(Color(nsColor: .separatorColor), lineWidth: 1)
+                        )
+
+                    HStack {
+                        Button(L10n.AITerminalManager.askShannon) {
+                            store.askGlobalShannon(shannonPrompt)
+                            if store.lastError == nil {
+                                shannonPrompt = ""
+                            }
+                        }
+                        .disabled(!store.runtimeStatus.healthIsUsable || store.shannonPrimarySession == nil)
+
+                        Spacer()
+                    }
+
+                    if let approval = store.pendingShannonApproval {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(L10n.AITerminalManager.shannonApprovalCard)
+                                .font(.headline)
+                            Text(approval.tool)
+                                .font(.callout.weight(.semibold))
+                            Text(approval.args)
+                                .font(.system(.caption, design: .monospaced))
+                                .textSelection(.enabled)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(8)
+                                .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 8))
+
+                            HStack {
+                                Button(L10n.AITerminalManager.approveAction) {
+                                    store.respondToShannonApproval(approved: true)
+                                }
+                                Button(L10n.AITerminalManager.denyAction) {
+                                    store.respondToShannonApproval(approved: false)
+                                }
+                                Spacer()
+                            }
+                        }
+                        .padding(10)
+                        .background(.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
+                    }
+
+                    Text(L10n.AITerminalManager.shannonResponse)
+                        .font(.headline)
+                    ScrollView {
+                        Text(store.shannonResponse.isEmpty ? L10n.AITerminalManager.shannonResponseEmpty : store.shannonResponse)
+                            .font(.system(.caption, design: .monospaced))
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .textSelection(.enabled)
+                    }
+                    .frame(minHeight: 120, maxHeight: 220)
+                    .padding(8)
+                    .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 8))
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
     private var supervisorSection: some View {
         GroupBox(L10n.AITerminalManager.supervisor) {
             VStack(alignment: .leading, spacing: 12) {
@@ -83,8 +273,6 @@ struct AITerminalManagerView: View {
                         .font(.headline)
                     Spacer()
                     Button(L10n.AITerminalManager.refreshSnapshot) { store.refresh() }
-                    Button(L10n.AITerminalManager.startSupervisor) { store.startSupervisor() }
-                    Button(L10n.AITerminalManager.stopSupervisor) { store.stopSupervisor() }
                 }
 
                 Text(L10n.AITerminalManager.supervisorHint)
@@ -662,99 +850,33 @@ struct AITerminalManagerView: View {
                         }
                     }
 
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(L10n.AITerminalManager.visibleBuffer)
-                            .font(.headline)
-                        ScrollView {
-                            Text(store.selectedSessionVisibleText.isEmpty ? L10n.AITerminalManager.visibleBufferEmpty : store.selectedSessionVisibleText)
-                                .font(.system(.caption, design: .monospaced))
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .textSelection(.enabled)
-                        }
-                        .frame(minHeight: 100, maxHeight: 150)
-                        .padding(8)
-                        .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 8))
-                    }
-
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(L10n.AITerminalManager.screenBuffer)
-                            .font(.headline)
-                        ScrollView {
-                            Text(store.selectedSessionScreenText.isEmpty ? L10n.AITerminalManager.screenBufferEmpty : store.selectedSessionScreenText)
-                                .font(.system(.caption, design: .monospaced))
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .textSelection(.enabled)
-                        }
-                        .frame(minHeight: 120, maxHeight: 180)
-                        .padding(8)
-                        .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 8))
-                    }
-
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(L10n.AITerminalManager.shannonPrompt)
-                            .font(.headline)
-                        TextEditor(text: $shannonPrompt)
-                            .font(.system(.body, design: .monospaced))
-                            .frame(minHeight: 72, maxHeight: 120)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 8)
-                                    .stroke(Color(nsColor: .separatorColor), lineWidth: 1)
-                            )
-
-                        HStack {
-                            Button(L10n.AITerminalManager.askShannon) {
-                                store.askShannon(shannonPrompt, for: session.id)
-                                if store.lastError == nil {
-                                    shannonPrompt = ""
-                                }
-                            }
-                            .disabled(!store.runtimeStatus.healthIsUsable)
-
-                            Spacer()
-
-                            Text(store.shannonStatusText)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-
-                        if let approval = store.pendingShannonApproval {
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text(L10n.AITerminalManager.shannonApprovalCard)
-                                    .font(.headline)
-                                Text(approval.tool)
-                                    .font(.callout.weight(.semibold))
-                                Text(approval.args)
+                    DisclosureGroup(L10n.AITerminalManager.sessionContext, isExpanded: $showsSessionContext) {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(L10n.AITerminalManager.visibleBuffer)
+                                .font(.headline)
+                            ScrollView {
+                                Text(store.selectedSessionVisibleText.isEmpty ? L10n.AITerminalManager.visibleBufferEmpty : store.selectedSessionVisibleText)
                                     .font(.system(.caption, design: .monospaced))
-                                    .textSelection(.enabled)
                                     .frame(maxWidth: .infinity, alignment: .leading)
-                                    .padding(8)
-                                    .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 8))
-
-                                HStack {
-                                    Button(L10n.AITerminalManager.approveAction) {
-                                        store.respondToShannonApproval(approved: true)
-                                    }
-                                    Button(L10n.AITerminalManager.denyAction) {
-                                        store.respondToShannonApproval(approved: false)
-                                    }
-                                    Spacer()
-                                }
+                                    .textSelection(.enabled)
                             }
-                            .padding(10)
-                            .background(.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
-                        }
+                            .frame(minHeight: 100, maxHeight: 150)
+                            .padding(8)
+                            .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 8))
 
-                        Text(L10n.AITerminalManager.shannonResponse)
-                            .font(.headline)
-                        ScrollView {
-                            Text(store.shannonResponse.isEmpty ? L10n.AITerminalManager.shannonResponseEmpty : store.shannonResponse)
-                                .font(.system(.caption, design: .monospaced))
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .textSelection(.enabled)
+                            Text(L10n.AITerminalManager.screenBuffer)
+                                .font(.headline)
+                            ScrollView {
+                                Text(store.selectedSessionScreenText.isEmpty ? L10n.AITerminalManager.screenBufferEmpty : store.selectedSessionScreenText)
+                                    .font(.system(.caption, design: .monospaced))
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .textSelection(.enabled)
+                            }
+                            .frame(minHeight: 120, maxHeight: 180)
+                            .padding(8)
+                            .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 8))
                         }
-                        .frame(minHeight: 120, maxHeight: 200)
-                        .padding(8)
-                        .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 8))
+                        .padding(.top, 8)
                     }
                 } else {
                     Text(L10n.AITerminalManager.selectedSessionEmpty)
@@ -827,6 +949,37 @@ struct AITerminalManagerView: View {
                 .frame(maxWidth: .infinity, minHeight: 200, maxHeight: 260, alignment: .topLeading)
             }
         }
+    }
+
+    private func syncShannonSetupFromStore() {
+        let supervisor = store.configuration.supervisor
+        shannonRuntimeMode = supervisor.runtimeMode
+        shannonBinaryPath = supervisor.binaryPath ?? ""
+        shannonControlURL = supervisor.controlURL ?? ""
+        shannonEndpoint = supervisor.gateway.endpoint
+        shannonAPIKey = supervisor.gateway.apiKey
+        shannonModelTier = supervisor.gateway.modelTier
+        shannonModelName = supervisor.gateway.modelName
+        shannonAutoStart = supervisor.autoStart
+        shannonTimeoutSeconds = String(supervisor.requestTimeoutSeconds)
+    }
+
+    private func composeShannonSupervisorConfiguration() -> ShannonSupervisorConfiguration {
+        ShannonSupervisorConfiguration(
+            runtimeMode: shannonRuntimeMode,
+            binaryPath: shannonBinaryPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : shannonBinaryPath,
+            arguments: [],
+            autoStart: shannonAutoStart,
+            environment: [:],
+            controlURL: shannonControlURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : shannonControlURL,
+            requestTimeoutSeconds: max(Int(shannonTimeoutSeconds) ?? 2, 1),
+            gateway: ShannonGatewayConfiguration(
+                endpoint: shannonEndpoint,
+                apiKey: shannonAPIKey,
+                modelTier: shannonModelTier,
+                modelName: shannonModelName
+            )
+        )
     }
 }
 

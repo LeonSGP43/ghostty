@@ -172,6 +172,42 @@ final class AITerminalManagerStore: ObservableObject {
         return sessions.first(where: { $0.id == selectedSessionID })
     }
 
+    var shannonPrimarySession: AITerminalSessionSummary? {
+        Self.preferredShannonSession(
+            selectedSessionID: selectedSessionID,
+            sessions: sessions
+        )
+    }
+
+    var shannonPrimarySessionLabel: String {
+        guard let session = shannonPrimarySession else {
+            return L10n.AITerminalManager.shannonNoSession
+        }
+
+        return "\(session.title) · \(session.hostLabel)"
+    }
+
+    var shannonModeLabel: String {
+        configuration.supervisor.runtimeSummary
+    }
+
+    var shannonModelLabel: String {
+        if configuration.supervisor.isEmbeddedRuntime {
+            return L10n.AITerminalManager.shannonEmbeddedModelLabel
+        }
+
+        return configuration.supervisor.gateway.modelSummary
+    }
+
+    var shannonEndpointLabel: String {
+        if configuration.supervisor.isEmbeddedRuntime {
+            return L10n.AITerminalManager.shannonEmbeddedEndpointLabel
+        }
+
+        let endpoint = configuration.supervisor.gateway.trimmedEndpoint
+        return endpoint.isEmpty ? "—" : endpoint
+    }
+
     func isUserManagedHost(_ host: AITerminalHost) -> Bool {
         configuration.savedHosts.contains(where: { $0.id == host.id })
     }
@@ -194,16 +230,26 @@ final class AITerminalManagerStore: ObservableObject {
         supervisor.updateAvailability(for: configuration.supervisor)
         supervisorState = supervisor.state
 
-        if configuration.supervisor.isEmbeddedRuntime, case .stopped = supervisor.state {
-            supervisor.start(configuration: configuration.supervisor)
-            supervisorState = supervisor.state
-        } else if configuration.supervisor.autoStart, case .stopped = supervisor.state {
-            supervisor.start(configuration: configuration.supervisor)
-            supervisorState = supervisor.state
-        }
+        maybeStartSupervisorFromConfiguration()
 
         refreshRuntimeStatus(force: true)
         rebuildSessions()
+    }
+
+    nonisolated static func preferredShannonSession(
+        selectedSessionID: UUID?,
+        sessions: [AITerminalSessionSummary]
+    ) -> AITerminalSessionSummary? {
+        if let selectedSessionID,
+           let selected = sessions.first(where: { $0.id == selectedSessionID }) {
+            return selected
+        }
+
+        if let focused = sessions.first(where: \.isFocused) {
+            return focused
+        }
+
+        return sessions.first
     }
 
     func reloadImportedSSHHosts() {
@@ -756,8 +802,25 @@ final class AITerminalManagerStore: ObservableObject {
         rebuildSessions()
     }
 
+    func saveShannonSetup(_ supervisorConfiguration: ShannonSupervisorConfiguration) {
+        configuration.supervisor = supervisorConfiguration
+        persistConfiguration()
+        stopSupervisor()
+        refresh()
+    }
+
     func startSupervisor() {
-        supervisor.start(configuration: configuration.supervisor)
+        do {
+            try prepareShannonRuntimeWorkspaceIfNeeded(for: configuration.supervisor)
+        } catch {
+            lastError = error.localizedDescription
+            return
+        }
+
+        supervisor.start(
+            configuration: configuration.supervisor,
+            workingDirectoryURL: shannonRuntimeWorkspaceURL
+        )
         supervisorState = supervisor.state
         refreshRuntimeStatus(force: true)
     }
@@ -774,6 +837,10 @@ final class AITerminalManagerStore: ObservableObject {
         pendingShannonApproval = nil
     }
 
+    func askGlobalShannon(_ prompt: String) {
+        askShannon(prompt, for: shannonPrimarySession?.id)
+    }
+
     func askShannon(_ prompt: String, for sessionID: UUID? = nil) {
         let trimmedPrompt = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedPrompt.isEmpty else {
@@ -781,9 +848,9 @@ final class AITerminalManagerStore: ObservableObject {
             return
         }
 
-        let targetSessionID = sessionID ?? selectedSessionID
+        let targetSessionID = sessionID ?? shannonPrimarySession?.id
         guard let targetSessionID else {
-            lastError = L10n.AITerminalManager.selectSessionFirst
+            lastError = L10n.AITerminalManager.shannonNoSessionAvailable
             return
         }
 
@@ -1492,6 +1559,53 @@ final class AITerminalManagerStore: ObservableObject {
             }
             return shannonRunState.displayName
         }
+    }
+
+    private var shannonRuntimeWorkspaceURL: URL {
+        configurationURL
+            .deletingLastPathComponent()
+            .appendingPathComponent("shannon-runtime", isDirectory: true)
+    }
+
+    private func maybeStartSupervisorFromConfiguration() {
+        guard case .stopped = supervisor.state else { return }
+
+        let shouldStart: Bool
+        if configuration.supervisor.isEmbeddedRuntime {
+            shouldStart = true
+        } else {
+            shouldStart = configuration.supervisor.autoStart
+        }
+
+        guard shouldStart else { return }
+
+        do {
+            try prepareShannonRuntimeWorkspaceIfNeeded(for: configuration.supervisor)
+        } catch {
+            lastError = error.localizedDescription
+            return
+        }
+
+        supervisor.start(
+            configuration: configuration.supervisor,
+            workingDirectoryURL: shannonRuntimeWorkspaceURL
+        )
+        supervisorState = supervisor.state
+    }
+
+    private func prepareShannonRuntimeWorkspaceIfNeeded(
+        for configuration: ShannonSupervisorConfiguration
+    ) throws {
+        guard !configuration.isEmbeddedRuntime else { return }
+
+        let fileManager = FileManager.default
+        let runtimeWorkspaceURL = shannonRuntimeWorkspaceURL
+        let shannonConfigDirectoryURL = runtimeWorkspaceURL.appendingPathComponent(".shannon", isDirectory: true)
+        let overlayURL = shannonConfigDirectoryURL.appendingPathComponent("config.local.yaml", isDirectory: false)
+
+        try fileManager.createDirectory(at: runtimeWorkspaceURL, withIntermediateDirectories: true)
+        try fileManager.createDirectory(at: shannonConfigDirectoryURL, withIntermediateDirectories: true)
+        try configuration.shanOverlayYAML.write(to: overlayURL, atomically: true, encoding: .utf8)
     }
 
     private func pruneClosedSessions(activeSessionIDs: Set<UUID>) {
