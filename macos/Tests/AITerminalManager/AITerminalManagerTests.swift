@@ -331,6 +331,181 @@ struct AITerminalManagerTests {
         #expect(finalReply?.contains("托管") == true)
     }
 
+    @Test func embeddedRuntimeChainsRemoteTabCreationIntoCommand() async throws {
+        let runtime = EmbeddedShannonRuntime()
+        let sessionID = UUID()
+        let createdSessionID = UUID()
+        let request = ShannonRuntimeRequest(
+            userPrompt: "开一个到 buildbox 的新 tab 然后运行 `pwd`",
+            session: ShannonRuntimeSessionContext(
+                id: sessionID,
+                title: "Current",
+                hostID: AITerminalHost.local.id,
+                hostLabel: "This Mac",
+                workspaceID: nil,
+                workingDirectory: "/tmp/app",
+                managedState: .managedActive
+            ),
+            visibleText: "",
+            screenText: "$",
+            availableHosts: [
+                ShannonRuntimeHostContext(
+                    id: AITerminalHost.local.id,
+                    name: "This Mac",
+                    transport: .local,
+                    sshAlias: nil,
+                    hostname: nil,
+                    defaultDirectory: nil
+                ),
+                ShannonRuntimeHostContext(
+                    id: "ssh:buildbox",
+                    name: "buildbox",
+                    transport: .ssh,
+                    sshAlias: "buildbox",
+                    hostname: "10.0.0.5",
+                    defaultDirectory: "/srv/app"
+                ),
+            ],
+            availableWorkspaces: []
+        )
+
+        var approvalKinds: [ShannonProposedActionKind] = []
+        var actionKinds: [ShannonProposedActionKind] = []
+        var finalReply: String?
+        var finalSessionID: String?
+
+        for try await event in runtime.streamMessage(request) {
+            switch event {
+            case .approvalNeeded(let approval):
+                if let kind = approval.action?.kind {
+                    approvalKinds.append(kind)
+                }
+                try await runtime.submitApproval(id: approval.id, approved: true)
+            case .actionRequested(let actionRequest):
+                actionKinds.append(actionRequest.action.kind)
+
+                switch actionRequest.action.kind {
+                case .createRemoteTab:
+                    #expect(actionRequest.action.targetSessionID == sessionID)
+                    #expect(actionRequest.action.hostID == "ssh:buildbox")
+                    try await runtime.submitActionResult(
+                        id: actionRequest.id,
+                        result: ShannonActionExecutionResult(
+                            success: true,
+                            output: "create_remote_tab · buildbox · buildbox",
+                            sessionID: createdSessionID,
+                            sessionTitle: "buildbox"
+                        )
+                    )
+                case .sendCommand:
+                    #expect(actionRequest.action.targetSessionID == createdSessionID)
+                    #expect(actionRequest.action.payload == "pwd")
+                    try await runtime.submitActionResult(
+                        id: actionRequest.id,
+                        result: ShannonActionExecutionResult(
+                            success: true,
+                            output: "send_command · pwd"
+                        )
+                    )
+                default:
+                    Issue.record("Unexpected action kind: \(actionRequest.action.kind)")
+                }
+            case .done(let result):
+                finalReply = result.reply
+                finalSessionID = result.sessionID
+            default:
+                break
+            }
+        }
+
+        #expect(approvalKinds == [.createRemoteTab, .sendCommand])
+        #expect(actionKinds == [.createRemoteTab, .sendCommand])
+        #expect(finalSessionID == createdSessionID.uuidString)
+        #expect(finalReply?.contains("连续动作") == true)
+        #expect(finalReply?.contains("buildbox") == true)
+        #expect(finalReply?.contains("`pwd`") == true)
+    }
+
+    @Test func embeddedRuntimeChainsCommandIntoReadWithoutExtraApproval() async throws {
+        let runtime = EmbeddedShannonRuntime()
+        let sessionID = UUID()
+        let request = ShannonRuntimeRequest(
+            userPrompt: "运行 `pwd` 然后读取一下",
+            session: ShannonRuntimeSessionContext(
+                id: sessionID,
+                title: "Server",
+                hostID: AITerminalHost.local.id,
+                hostLabel: "This Mac",
+                workspaceID: nil,
+                workingDirectory: "/tmp/app",
+                managedState: .managedActive
+            ),
+            visibleText: "",
+            screenText: "$",
+            availableHosts: [
+                ShannonRuntimeHostContext(
+                    id: AITerminalHost.local.id,
+                    name: "This Mac",
+                    transport: .local,
+                    sshAlias: nil,
+                    hostname: nil,
+                    defaultDirectory: nil
+                ),
+            ],
+            availableWorkspaces: []
+        )
+
+        var approvalKinds: [ShannonProposedActionKind] = []
+        var actionKinds: [ShannonProposedActionKind] = []
+        var finalReply: String?
+
+        for try await event in runtime.streamMessage(request) {
+            switch event {
+            case .approvalNeeded(let approval):
+                if let kind = approval.action?.kind {
+                    approvalKinds.append(kind)
+                }
+                try await runtime.submitApproval(id: approval.id, approved: true)
+            case .actionRequested(let actionRequest):
+                actionKinds.append(actionRequest.action.kind)
+
+                switch actionRequest.action.kind {
+                case .sendCommand:
+                    #expect(actionRequest.action.targetSessionID == sessionID)
+                    #expect(actionRequest.action.payload == "pwd")
+                    try await runtime.submitActionResult(
+                        id: actionRequest.id,
+                        result: ShannonActionExecutionResult(
+                            success: true,
+                            output: "send_command · pwd"
+                        )
+                    )
+                case .readTab:
+                    #expect(actionRequest.action.targetSessionID == sessionID)
+                    try await runtime.submitActionResult(
+                        id: actionRequest.id,
+                        result: ShannonActionExecutionResult(
+                            success: true,
+                            output: "Tab title: Server\nVisible buffer:\n/tmp/app"
+                        )
+                    )
+                default:
+                    Issue.record("Unexpected action kind: \(actionRequest.action.kind)")
+                }
+            case .done(let result):
+                finalReply = result.reply
+            default:
+                break
+            }
+        }
+
+        #expect(approvalKinds == [.sendCommand])
+        #expect(actionKinds == [.sendCommand, .readTab])
+        #expect(finalReply?.contains("连续动作") == true)
+        #expect(finalReply?.contains("`pwd`") == true)
+        #expect(finalReply?.contains("Tab title: Server") == true)
+    }
+
     @Test func shannonSessionHandoffMovesTaskBindingToNewTab() {
         let sourceSessionID = UUID()
         let targetSessionID = UUID()

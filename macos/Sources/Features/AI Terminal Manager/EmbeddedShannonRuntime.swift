@@ -96,13 +96,22 @@ private enum EmbeddedShannonRuntimeError: LocalizedError {
     }
 }
 
+private struct EmbeddedShannonPlanStep {
+    var action: ShannonProposedAction
+    var toolName: String
+    var actionSummary: String
+}
+
+private struct EmbeddedShannonCompletedStep {
+    var action: ShannonProposedAction
+    var result: ShannonActionExecutionResult
+}
+
 private struct EmbeddedShannonPlan {
     var lead: String
     var analysisReply: String
     var deniedReply: String
-    var toolName: String?
-    var actionSummary: String?
-    var action: ShannonProposedAction?
+    var steps: [EmbeddedShannonPlanStep]
     var prefersChinese: Bool
 }
 
@@ -169,9 +178,7 @@ actor EmbeddedShannonRuntime {
         let plan = makePlan(for: request)
         continuation.yield(.delta(plan.lead))
 
-        guard let action = plan.action,
-              let toolName = plan.toolName,
-              let actionSummary = plan.actionSummary else {
+        guard !plan.steps.isEmpty else {
             continuation.yield(.done(
                 ShannonBridgeRunResult(
                     reply: plan.analysisReply,
@@ -182,56 +189,84 @@ actor EmbeddedShannonRuntime {
             return
         }
 
-        continuation.yield(.tool(.init(tool: toolName, status: "planned", elapsed: nil)))
+        var activeSessionID = request.session.id
+        var completedSteps: [EmbeddedShannonCompletedStep] = []
 
-        if action.requiresApproval {
-            let approvalID = UUID().uuidString
-            continuation.yield(.approvalNeeded(
-                ShannonPendingApproval(
-                    id: approvalID,
-                    tool: toolName,
-                    args: actionSummary,
-                    action: action
-                )
-            ))
+        for plannedStep in plan.steps {
+            let action = Self.retargetAction(
+                plannedStep.action,
+                from: request.session.id,
+                to: activeSessionID
+            )
 
-            let approved = await waitForApproval(id: approvalID)
+            continuation.yield(.tool(.init(
+                tool: plannedStep.toolName,
+                status: "planned",
+                elapsed: nil
+            )))
+
+            if action.requiresApproval {
+                let approvalID = UUID().uuidString
+                continuation.yield(.approvalNeeded(
+                    ShannonPendingApproval(
+                        id: approvalID,
+                        tool: plannedStep.toolName,
+                        args: plannedStep.actionSummary,
+                        action: action
+                    )
+                ))
+
+                let approved = await waitForApproval(id: approvalID)
+                guard !Task.isCancelled else { return }
+
+                continuation.yield(.approvalResult(id: approvalID, approved: approved))
+
+                guard approved else {
+                    continuation.yield(.failed(plan.deniedReply))
+                    return
+                }
+
+                continuation.yield(.tool(.init(
+                    tool: plannedStep.toolName,
+                    status: "approved",
+                    elapsed: nil
+                )))
+            }
+
+            let actionID = UUID().uuidString
+            continuation.yield(.actionRequested(.init(
+                id: actionID,
+                action: action,
+                summary: plannedStep.actionSummary
+            )))
+
+            let actionResult = await waitForActionResult(id: actionID)
             guard !Task.isCancelled else { return }
 
-            continuation.yield(.approvalResult(id: approvalID, approved: approved))
-
-            guard approved else {
-                continuation.yield(.failed(plan.deniedReply))
+            guard actionResult.success else {
+                continuation.yield(.failed(actionResult.output))
                 return
             }
 
-            continuation.yield(.tool(.init(tool: toolName, status: "approved", elapsed: nil)))
+            continuation.yield(.tool(.init(
+                tool: plannedStep.toolName,
+                status: "completed",
+                elapsed: nil
+            )))
+
+            completedSteps.append(.init(action: action, result: actionResult))
+            if let adoptedSessionID = actionResult.sessionID {
+                activeSessionID = adoptedSessionID
+            }
         }
 
-        let actionID = UUID().uuidString
-        continuation.yield(.actionRequested(.init(
-            id: actionID,
-            action: action,
-            summary: actionSummary
-        )))
-
-        let actionResult = await waitForActionResult(id: actionID)
-        guard !Task.isCancelled else { return }
-
-        guard actionResult.success else {
-            continuation.yield(.failed(actionResult.output))
-            return
-        }
-
-        continuation.yield(.tool(.init(tool: toolName, status: "completed", elapsed: nil)))
         continuation.yield(.done(
             ShannonBridgeRunResult(
                 reply: Self.completionReply(
-                    for: action,
-                    result: actionResult,
+                    for: completedSteps,
                     prefersChinese: plan.prefersChinese
                 ),
-                sessionID: request.session.id.uuidString,
+                sessionID: activeSessionID.uuidString,
                 agent: "embedded-shannon"
             )
         ))
@@ -297,7 +332,8 @@ actor EmbeddedShannonRuntime {
             prefersChinese: prefersChinese
         )
 
-        if let action = Self.proposedAction(request) {
+        let steps = Self.proposedSteps(request, prefersChinese: prefersChinese)
+        if !steps.isEmpty {
             let lead = if prefersChinese {
                 """
                 我已经分析了当前 tab，并整理了可用的 Ghostty 原生上下文。
@@ -324,13 +360,7 @@ actor EmbeddedShannonRuntime {
                 lead: lead,
                 analysisReply: prefersChinese ? "请求已结束。" : "The request finished.",
                 deniedReply: deniedReply,
-                toolName: action.kind.rawValue,
-                actionSummary: Self.actionDescription(
-                    action,
-                    request: request,
-                    prefersChinese: prefersChinese
-                ),
-                action: action,
+                steps: steps,
                 prefersChinese: prefersChinese
             )
         }
@@ -361,47 +391,80 @@ actor EmbeddedShannonRuntime {
             lead: prefersChinese ? "正在分析当前 Ghostty tab 上下文。" : "Analyzing the current Ghostty tab context.",
             analysisReply: reply,
             deniedReply: prefersChinese ? "请求已结束。" : "The request finished.",
+            steps: [],
             prefersChinese: prefersChinese
         )
     }
 
-    private static func proposedAction(_ request: ShannonRuntimeRequest) -> ShannonProposedAction? {
+    private static func proposedSteps(
+        _ request: ShannonRuntimeRequest,
+        prefersChinese: Bool
+    ) -> [EmbeddedShannonPlanStep] {
         let userPrompt = request.userPrompt
+        let command = extractQuotedCommand(from: userPrompt) ?? extractCommandPayload(from: userPrompt)
+        let commandKind: ShannonProposedActionKind = prefersRawInput(prompt: userPrompt)
+            ? .sendInput
+            : .sendCommand
+        let wantsRead = isReadTabRequest(userPrompt)
 
-        if let command = extractQuotedCommand(from: userPrompt) {
-            return ShannonProposedAction(
-                targetSessionID: request.session.id,
-                kind: prefersRawInput(prompt: userPrompt) ? .sendInput : .sendCommand,
-                payload: command
-            )
+        var actions: [ShannonProposedAction] = []
+
+        if let createAction = proposedCreateTabAction(request) {
+            actions.append(createAction)
         }
 
-        if let command = extractCommandPayload(from: userPrompt) {
-            return ShannonProposedAction(
+        if let command, !command.isEmpty {
+            actions.append(ShannonProposedAction(
                 targetSessionID: request.session.id,
-                kind: prefersRawInput(prompt: userPrompt) ? .sendInput : .sendCommand,
+                kind: commandKind,
                 payload: command
-            )
+            ))
         }
 
-        let normalized = userPrompt.lowercased()
-        let matchedWorkspace = resolveWorkspace(in: request)
-        let matchedHost = resolveHost(in: request)
-        let currentDirectory = mentionsSameDirectory(userPrompt) ? request.session.workingDirectory : nil
-
-        if normalized.contains("read tab")
-            || normalized.contains("read the tab")
-            || normalized.contains("inspect tab")
-            || normalized.contains("capture tab")
-            || userPrompt.contains("读取")
-            || userPrompt.contains("重新读")
-            || userPrompt.contains("扫描") {
-            return ShannonProposedAction(
+        if wantsRead {
+            actions.append(ShannonProposedAction(
                 targetSessionID: request.session.id,
                 kind: .readTab,
                 payload: nil
+            ))
+        }
+
+        if actions.isEmpty, isFocusRequest(userPrompt) {
+            actions.append(ShannonProposedAction(
+                targetSessionID: request.session.id,
+                kind: .focusSession,
+                payload: nil
+            ))
+        }
+
+        if actions.isEmpty, isCloseRequest(userPrompt) {
+            actions.append(ShannonProposedAction(
+                targetSessionID: request.session.id,
+                kind: .closeTab,
+                payload: nil
+            ))
+        }
+
+        return actions.map { action in
+            EmbeddedShannonPlanStep(
+                action: action,
+                toolName: action.kind.rawValue,
+                actionSummary: Self.actionDescription(
+                    action,
+                    request: request,
+                    prefersChinese: prefersChinese
+                )
             )
         }
+    }
+
+    private static func proposedCreateTabAction(
+        _ request: ShannonRuntimeRequest
+    ) -> ShannonProposedAction? {
+        let userPrompt = request.userPrompt
+        let matchedWorkspace = resolveWorkspace(in: request)
+        let matchedHost = resolveHost(in: request)
+        let currentDirectory = mentionsSameDirectory(userPrompt) ? request.session.workingDirectory : nil
 
         if isCreateLocalTabRequest(userPrompt) {
             return ShannonProposedAction(
@@ -458,27 +521,6 @@ actor EmbeddedShannonRuntime {
                     directoryOverride: currentDirectory
                 )
             }
-        }
-
-        if normalized.contains("close tab")
-            || normalized.contains("close session")
-            || userPrompt.contains("关闭")
-            || userPrompt.contains("关掉") {
-            return ShannonProposedAction(
-                targetSessionID: request.session.id,
-                kind: .closeTab,
-                payload: nil
-            )
-        }
-
-        if normalized.contains("focus")
-            || userPrompt.contains("聚焦")
-            || userPrompt.contains("切到") {
-            return ShannonProposedAction(
-                targetSessionID: request.session.id,
-                kind: .focusSession,
-                payload: nil
-            )
         }
 
         return nil
@@ -578,6 +620,32 @@ actor EmbeddedShannonRuntime {
             || prompt.contains("本地")
             || prompt.contains("本机")
             || prompt.contains("当前机器")
+    }
+
+    private static func isReadTabRequest(_ prompt: String) -> Bool {
+        let normalized = prompt.lowercased()
+        return normalized.contains("read tab")
+            || normalized.contains("read the tab")
+            || normalized.contains("inspect tab")
+            || normalized.contains("capture tab")
+            || prompt.contains("读取")
+            || prompt.contains("重新读")
+            || prompt.contains("扫描")
+    }
+
+    private static func isCloseRequest(_ prompt: String) -> Bool {
+        let normalized = prompt.lowercased()
+        return normalized.contains("close tab")
+            || normalized.contains("close session")
+            || prompt.contains("关闭")
+            || prompt.contains("关掉")
+    }
+
+    private static func isFocusRequest(_ prompt: String) -> Bool {
+        let normalized = prompt.lowercased()
+        return normalized.contains("focus")
+            || prompt.contains("聚焦")
+            || prompt.contains("切到")
     }
 
     private static func mentionsSameDirectory(_ prompt: String) -> Bool {
@@ -702,7 +770,52 @@ actor EmbeddedShannonRuntime {
         }
     }
 
+    private static func retargetAction(
+        _ action: ShannonProposedAction,
+        from originalSessionID: UUID,
+        to currentSessionID: UUID
+    ) -> ShannonProposedAction {
+        guard originalSessionID != currentSessionID, action.targetSessionID == originalSessionID else {
+            return action
+        }
+
+        var retargetedAction = action
+        retargetedAction.targetSessionID = currentSessionID
+        return retargetedAction
+    }
+
     private static func completionReply(
+        for completedSteps: [EmbeddedShannonCompletedStep],
+        prefersChinese: Bool
+    ) -> String {
+        guard let firstCompletedStep = completedSteps.first else {
+            return prefersChinese ? "请求已结束。" : "The request finished."
+        }
+
+        if completedSteps.count == 1 {
+            return singleStepCompletionReply(
+                for: firstCompletedStep.action,
+                result: firstCompletedStep.result,
+                prefersChinese: prefersChinese
+            )
+        }
+
+        let stepSummaries = completedSteps.enumerated().map { index, completedStep in
+            let summary = stepCompletionSummary(
+                for: completedStep.action,
+                result: completedStep.result,
+                prefersChinese: prefersChinese
+            )
+            return "\(index + 1). \(summary)"
+        }.joined(separator: "\n")
+
+        if prefersChinese {
+            return "Ghostty 已完成 \(completedSteps.count) 个连续动作：\n\(stepSummaries)"
+        }
+        return "Ghostty completed \(completedSteps.count) chained actions:\n\(stepSummaries)"
+    }
+
+    private static func singleStepCompletionReply(
         for action: ShannonProposedAction,
         result: ShannonActionExecutionResult,
         prefersChinese: Bool
@@ -727,6 +840,44 @@ actor EmbeddedShannonRuntime {
                 return "Ghostty 已执行该动作：\(result.output)"
             }
             return "Ghostty executed the requested action: \(result.output)"
+        }
+    }
+
+    private static func stepCompletionSummary(
+        for action: ShannonProposedAction,
+        result: ShannonActionExecutionResult,
+        prefersChinese: Bool
+    ) -> String {
+        switch action.kind {
+        case .createLocalTab, .createRemoteTab:
+            if let sessionTitle = result.sessionTitle, !sessionTitle.isEmpty {
+                return prefersChinese
+                    ? "已创建并切换到新的托管 tab：\(sessionTitle)"
+                    : "created and switched to the new managed tab \(sessionTitle)"
+            }
+            return prefersChinese ? "已创建新的托管 tab" : "created a new managed tab"
+        case .sendCommand:
+            if let payload = action.payload, !payload.isEmpty {
+                return prefersChinese
+                    ? "已发送命令 `\(payload)`"
+                    : "sent command `\(payload)`"
+            }
+            return prefersChinese ? "已发送命令" : "sent a command"
+        case .sendInput:
+            if let payload = action.payload, !payload.isEmpty {
+                return prefersChinese
+                    ? "已发送原始输入 `\(payload)`"
+                    : "sent raw input `\(payload)`"
+            }
+            return prefersChinese ? "已发送原始输入" : "sent raw input"
+        case .focusSession:
+            return prefersChinese ? "已聚焦当前 tab" : "focused the current tab"
+        case .closeSession, .closeTab:
+            return prefersChinese ? "已关闭当前 tab" : "closed the current tab"
+        case .readTab:
+            return prefersChinese
+                ? "已读取当前 tab 快照：\n\(result.output)"
+                : "read the current tab snapshot:\n\(result.output)"
         }
     }
 }
