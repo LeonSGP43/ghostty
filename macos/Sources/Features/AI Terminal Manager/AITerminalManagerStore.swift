@@ -2,6 +2,13 @@ import AppKit
 import Foundation
 import SwiftUI
 
+struct ShannonSessionHandoffState: Equatable, Sendable {
+    var taskBindings: [UUID: UUID]
+    var tasks: [AITerminalTaskRecord]
+    var registrations: [UUID: AITerminalLaunchRegistration]
+    var selectedSessionID: UUID?
+}
+
 @MainActor
 final class AITerminalManagerStore: ObservableObject {
     private struct PendingSSHPasswordAutomation {
@@ -786,6 +793,18 @@ final class AITerminalManagerStore: ObservableObject {
             ),
             visibleText: visibleText,
             screenText: screenText,
+            availableSessions: sessions.map { availableSession in
+                ShannonRuntimeAvailableSessionContext(
+                    id: availableSession.id,
+                    title: availableSession.title,
+                    hostID: availableSession.hostID,
+                    hostLabel: availableSession.hostLabel,
+                    workspaceID: availableSession.workspaceID,
+                    workingDirectory: availableSession.workingDirectory,
+                    managedState: availableSession.managedState,
+                    isFocused: availableSession.isFocused
+                )
+            },
             availableHosts: availableHosts.map { host in
                 ShannonRuntimeHostContext(
                     id: host.id,
@@ -821,6 +840,8 @@ final class AITerminalManagerStore: ObservableObject {
 
         let runtimeConfiguration = configuration.supervisor
         shannonRunTask = Task { @MainActor [bridgeClient, runtimeConfiguration] in
+            var currentManagedSessionID = targetSessionID
+
             do {
                 for try await event in bridgeClient.streamMessage(
                     configuration: runtimeConfiguration,
@@ -832,10 +853,16 @@ final class AITerminalManagerStore: ObservableObject {
                     case .tool(let payload):
                         shannonLastToolEvent = "\(payload.tool) · \(payload.status)"
                     case .approvalNeeded(let approval):
+                        if let action = approval.action {
+                            currentManagedSessionID = adoptShannonTargetSessionIfNeeded(
+                                for: action,
+                                currentManagedSessionID: currentManagedSessionID
+                            )
+                        }
                         pendingShannonApproval = approval
                         shannonRunState = .waitingApproval
-                        requireApproval(for: targetSessionID)
-                        if let task = task(for: targetSessionID) {
+                        requireApproval(for: currentManagedSessionID)
+                        if let task = task(for: currentManagedSessionID) {
                             updateTask(
                                 task.id,
                                 state: .waitingApproval,
@@ -846,22 +873,29 @@ final class AITerminalManagerStore: ObservableObject {
                         pendingShannonApproval = nil
                         shannonRunState = .running
                         if approved {
-                            resumeTask(for: targetSessionID)
+                            resumeTask(for: currentManagedSessionID)
                         } else {
-                            failTask(for: targetSessionID)
+                            failTask(for: currentManagedSessionID)
                         }
                     case .actionRequested(let request):
+                        currentManagedSessionID = adoptShannonTargetSessionIfNeeded(
+                            for: request.action,
+                            currentManagedSessionID: currentManagedSessionID
+                        )
                         shannonLastToolEvent = request.summary
-                        if let task = task(for: request.action.targetSessionID) {
+                        if let task = task(for: currentManagedSessionID) {
                             updateTask(task.id, state: .active, note: request.summary)
                         }
 
                         do {
-                            let output = try executeShannonAction(request.action)
+                            let actionResult = try executeShannonAction(request.action)
+                            if let adoptedSessionID = actionResult.sessionID {
+                                currentManagedSessionID = adoptedSessionID
+                            }
                             try await bridgeClient.submitActionResult(
                                 configuration: runtimeConfiguration,
                                 actionID: request.id,
-                                result: ShannonActionExecutionResult(success: true, output: output)
+                                result: actionResult
                             )
                         } catch {
                             try await bridgeClient.submitActionResult(
@@ -877,7 +911,7 @@ final class AITerminalManagerStore: ObservableObject {
                         pendingShannonApproval = nil
                         shannonResponse = result.reply
                         shannonRunState = .completed
-                        if let task = task(for: targetSessionID) {
+                        if let task = task(for: currentManagedSessionID) {
                             updateTask(
                                 task.id,
                                 state: .completed,
@@ -889,7 +923,7 @@ final class AITerminalManagerStore: ObservableObject {
                     case .failed(let message):
                         pendingShannonApproval = nil
                         shannonRunState = .failed(message: message)
-                        failTask(for: targetSessionID)
+                        failTask(for: currentManagedSessionID)
                         lastError = message
                     }
                 }
@@ -899,7 +933,7 @@ final class AITerminalManagerStore: ObservableObject {
                 }
                 pendingShannonApproval = nil
                 shannonRunState = .failed(message: error.localizedDescription)
-                failTask(for: targetSessionID)
+                failTask(for: currentManagedSessionID)
                 lastError = error.localizedDescription
             }
 
@@ -930,7 +964,7 @@ final class AITerminalManagerStore: ObservableObject {
         }
     }
 
-    private func executeShannonAction(_ action: ShannonProposedAction) throws -> String {
+    private func executeShannonAction(_ action: ShannonProposedAction) throws -> ShannonActionExecutionResult {
         lastError = nil
 
         switch action.kind {
@@ -943,6 +977,17 @@ final class AITerminalManagerStore: ObservableObject {
                 )
             }
             sendCommand(payload, to: action.targetSessionID)
+            if let lastError, !lastError.isEmpty {
+                throw NSError(
+                    domain: "AITerminalManagerStore",
+                    code: 3,
+                    userInfo: [NSLocalizedDescriptionKey: lastError]
+                )
+            }
+            return ShannonActionExecutionResult(
+                success: true,
+                output: "send_command · \(payload)"
+            )
 
         case .sendInput:
             guard let payload = action.payload, !payload.isEmpty else {
@@ -953,12 +998,39 @@ final class AITerminalManagerStore: ObservableObject {
                 )
             }
             sendInput(payload, to: action.targetSessionID)
+            if let lastError, !lastError.isEmpty {
+                throw NSError(
+                    domain: "AITerminalManagerStore",
+                    code: 3,
+                    userInfo: [NSLocalizedDescriptionKey: lastError]
+                )
+            }
+            return ShannonActionExecutionResult(
+                success: true,
+                output: "send_input · \(payload)"
+            )
 
         case .focusSession:
             focus(sessionID: action.targetSessionID)
+            if let lastError, !lastError.isEmpty {
+                throw NSError(
+                    domain: "AITerminalManagerStore",
+                    code: 3,
+                    userInfo: [NSLocalizedDescriptionKey: lastError]
+                )
+            }
+            return ShannonActionExecutionResult(success: true, output: "focus_session")
 
         case .closeSession:
             closeSession(action.targetSessionID)
+            if let lastError, !lastError.isEmpty {
+                throw NSError(
+                    domain: "AITerminalManagerStore",
+                    code: 3,
+                    userInfo: [NSLocalizedDescriptionKey: lastError]
+                )
+            }
+            return ShannonActionExecutionResult(success: true, output: "close_session")
 
         case .createLocalTab:
             return try createLocalTabForShannon(action)
@@ -967,41 +1039,17 @@ final class AITerminalManagerStore: ObservableObject {
             return try createRemoteTabForShannon(action)
 
         case .readTab:
-            return try readTabSnapshot(action.targetSessionID)
+            return ShannonActionExecutionResult(
+                success: true,
+                output: try readTabSnapshot(action.targetSessionID)
+            )
 
         case .closeTab:
             return try closeTabForShannon(action.targetSessionID)
         }
-
-        if let lastError, !lastError.isEmpty {
-            throw NSError(
-                domain: "AITerminalManagerStore",
-                code: 3,
-                userInfo: [NSLocalizedDescriptionKey: lastError]
-            )
-        }
-
-        switch action.kind {
-        case .sendCommand:
-            return "send_command · \(action.payload ?? "")"
-        case .sendInput:
-            return "send_input · \(action.payload ?? "")"
-        case .focusSession:
-            return "focus_session"
-        case .closeSession:
-            return "close_session"
-        case .createLocalTab:
-            return "create_local_tab"
-        case .createRemoteTab:
-            return "create_remote_tab"
-        case .readTab:
-            return "read_tab"
-        case .closeTab:
-            return "close_tab"
-        }
     }
 
-    private func createLocalTabForShannon(_ action: ShannonProposedAction) throws -> String {
+    private func createLocalTabForShannon(_ action: ShannonProposedAction) throws -> ShannonActionExecutionResult {
         let plan: AITerminalLaunchPlan
 
         if let workspaceID = action.workspaceID {
@@ -1043,10 +1091,20 @@ final class AITerminalManagerStore: ObservableObject {
         }
 
         let title = sessions.first(where: { $0.id == sessionID })?.title ?? sessionID.uuidString
-        return "create_local_tab · \(title)"
+        handoffShannonSession(
+            from: action.targetSessionID,
+            to: sessionID,
+            sessionTitle: title
+        )
+        return ShannonActionExecutionResult(
+            success: true,
+            output: "create_local_tab · \(title)",
+            sessionID: sessionID,
+            sessionTitle: title
+        )
     }
 
-    private func createRemoteTabForShannon(_ action: ShannonProposedAction) throws -> String {
+    private func createRemoteTabForShannon(_ action: ShannonProposedAction) throws -> ShannonActionExecutionResult {
         let host: AITerminalHost
         let plan: AITerminalLaunchPlan
 
@@ -1118,7 +1176,17 @@ final class AITerminalManagerStore: ObservableObject {
         registerRemoteSession(sessionID, host: host, savedPassword: passwordResolution.password)
         recordRecentHost(host.id, status: .connected)
         let title = sessions.first(where: { $0.id == sessionID })?.title ?? host.name
-        return "create_remote_tab · \(host.name) · \(title)"
+        handoffShannonSession(
+            from: action.targetSessionID,
+            to: sessionID,
+            sessionTitle: title
+        )
+        return ShannonActionExecutionResult(
+            success: true,
+            output: "create_remote_tab · \(host.name) · \(title)",
+            sessionID: sessionID,
+            sessionTitle: title
+        )
     }
 
     private func readTabSnapshot(_ sessionID: UUID) throws -> String {
@@ -1153,7 +1221,7 @@ final class AITerminalManagerStore: ObservableObject {
         """
     }
 
-    private func closeTabForShannon(_ sessionID: UUID) throws -> String {
+    private func closeTabForShannon(_ sessionID: UUID) throws -> ShannonActionExecutionResult {
         guard let controller = terminalController(for: sessionID) else {
             throw NSError(
                 domain: "AITerminalManagerStore",
@@ -1165,7 +1233,10 @@ final class AITerminalManagerStore: ObservableObject {
         let title = sessions.first(where: { $0.id == sessionID })?.title ?? sessionID.uuidString
         controller.closeTabImmediately()
         rebuildSessions()
-        return "close_tab · \(title)"
+        return ShannonActionExecutionResult(
+            success: true,
+            output: "close_tab · \(title)"
+        )
     }
 
     private func terminalController(for sessionID: UUID) -> TerminalController? {
@@ -1217,6 +1288,58 @@ final class AITerminalManagerStore: ObservableObject {
         registrations[createdSurface.id] = plan.registration
         rebuildSessions()
         return createdSurface.id
+    }
+
+    private func handoffShannonSession(
+        from sourceSessionID: UUID,
+        to targetSessionID: UUID,
+        sessionTitle: String?
+    ) {
+        var handoffState = ShannonSessionHandoffState(
+            taskBindings: taskBindings,
+            tasks: tasks,
+            registrations: registrations,
+            selectedSessionID: selectedSessionID
+        )
+        Self.applyShannonSessionHandoff(
+            from: sourceSessionID,
+            to: targetSessionID,
+            targetSessionTitle: sessionTitle,
+            state: &handoffState
+        )
+        taskBindings = handoffState.taskBindings
+        tasks = handoffState.tasks
+        registrations = handoffState.registrations
+        selectedSessionID = handoffState.selectedSessionID
+        refreshSelectedSessionSnapshot()
+    }
+
+    private func adoptShannonTargetSessionIfNeeded(
+        for action: ShannonProposedAction,
+        currentManagedSessionID: UUID
+    ) -> UUID {
+        var handoffState = ShannonSessionHandoffState(
+            taskBindings: taskBindings,
+            tasks: tasks,
+            registrations: registrations,
+            selectedSessionID: selectedSessionID
+        )
+        let nextManagedSessionID = Self.applyShannonTargetSessionAdoption(
+            for: action,
+            currentManagedSessionID: currentManagedSessionID,
+            sessions: sessions,
+            state: &handoffState
+        )
+        guard nextManagedSessionID != currentManagedSessionID else {
+            return currentManagedSessionID
+        }
+
+        taskBindings = handoffState.taskBindings
+        tasks = handoffState.tasks
+        registrations = handoffState.registrations
+        selectedSessionID = handoffState.selectedSessionID
+        refreshSelectedSessionSnapshot()
+        return nextManagedSessionID
     }
 
     private func rebuildSessions() {
@@ -1489,6 +1612,58 @@ final class AITerminalManagerStore: ObservableObject {
         return L10n.AITerminalManager.defaultTaskTitle
     }
 
+    nonisolated static func applyShannonSessionHandoff(
+        from sourceSessionID: UUID,
+        to targetSessionID: UUID,
+        targetSessionTitle: String?,
+        state: inout ShannonSessionHandoffState
+    ) {
+        if let taskID = state.taskBindings.removeValue(forKey: sourceSessionID) {
+            state.taskBindings[targetSessionID] = taskID
+            if let taskIndex = state.tasks.firstIndex(where: { $0.id == taskID }) {
+                state.tasks[taskIndex].sessionID = targetSessionID
+                state.tasks[taskIndex].updatedAt = .now
+                if let targetSessionTitle, !targetSessionTitle.isEmpty {
+                    state.tasks[taskIndex].title = L10n.AITerminalManager.manageSession(targetSessionTitle)
+                }
+            }
+        }
+
+        if sourceSessionID != targetSessionID, var sourceRegistration = state.registrations[sourceSessionID] {
+            sourceRegistration.managedState = .manual
+            state.registrations[sourceSessionID] = sourceRegistration
+        }
+
+        if var targetRegistration = state.registrations[targetSessionID] {
+            targetRegistration.managedState = .managedActive
+            state.registrations[targetSessionID] = targetRegistration
+        }
+
+        state.selectedSessionID = targetSessionID
+    }
+
+    nonisolated static func applyShannonTargetSessionAdoption(
+        for action: ShannonProposedAction,
+        currentManagedSessionID: UUID,
+        sessions: [AITerminalSessionSummary],
+        state: inout ShannonSessionHandoffState
+    ) -> UUID {
+        guard action.adoptsTargetSession,
+              action.targetSessionID != currentManagedSessionID,
+              let targetSession = sessions.first(where: { $0.id == action.targetSessionID })
+        else {
+            return currentManagedSessionID
+        }
+
+        applyShannonSessionHandoff(
+            from: currentManagedSessionID,
+            to: action.targetSessionID,
+            targetSessionTitle: targetSession.title,
+            state: &state
+        )
+        return action.targetSessionID
+    }
+
     private func reconcileImportedState() {
         let nextConfiguration = Self.reconciledConfiguration(
             configuration,
@@ -1651,6 +1826,7 @@ final class AITerminalManagerStore: ObservableObject {
     nonisolated static func shannonPrompt(
         userPrompt: String,
         session: AITerminalSessionSummary,
+        availableSessions: [AITerminalSessionSummary] = [],
         visibleText: String,
         screenText: String
     ) -> String {
@@ -1667,6 +1843,18 @@ final class AITerminalManagerStore: ObservableObject {
             ),
             visibleText: visibleText,
             screenText: screenText,
+            availableSessions: availableSessions.map { availableSession in
+                ShannonRuntimeAvailableSessionContext(
+                    id: availableSession.id,
+                    title: availableSession.title,
+                    hostID: availableSession.hostID,
+                    hostLabel: availableSession.hostLabel,
+                    workspaceID: availableSession.workspaceID,
+                    workingDirectory: availableSession.workingDirectory,
+                    managedState: availableSession.managedState,
+                    isFocused: availableSession.isFocused
+                )
+            },
             availableHosts: [],
             availableWorkspaces: []
         ).externalPromptText

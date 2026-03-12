@@ -19,6 +19,7 @@ final class MockSSHConnectionCredentialStore: SSHConnectionCredentialStore {
     }
 }
 
+@Suite(.serialized)
 struct AITerminalManagerTests {
     @Test @MainActor func sshConnectionsWindowsWithoutTabGroupsAreNotTreatedAsSameGroup() {
         let lhs = NSWindow()
@@ -108,8 +109,9 @@ struct AITerminalManagerTests {
     }
 
     @Test func shannonPromptIncludesSessionContext() {
+        let sessionID = UUID()
         let session = AITerminalSessionSummary(
-            id: UUID(),
+            id: sessionID,
             title: "Server",
             workingDirectory: "/tmp/app",
             isFocused: true,
@@ -121,15 +123,32 @@ struct AITerminalManagerTests {
             taskTitle: nil,
             taskState: nil
         )
+        let relatedSession = AITerminalSessionSummary(
+            id: UUID(),
+            title: "buildbox",
+            workingDirectory: "/srv/app",
+            isFocused: false,
+            hostID: "ssh:buildbox",
+            hostLabel: "buildbox",
+            workspaceID: "workspace:buildbox",
+            managedState: .managedActive,
+            taskID: nil,
+            taskTitle: nil,
+            taskState: nil
+        )
 
         let prompt = AITerminalManagerStore.shannonPrompt(
             userPrompt: "检查这个终端现在在做什么",
             session: session,
+            availableSessions: [session, relatedSession],
             visibleText: "npm run dev",
             screenText: "ready on http://localhost:3000"
         )
 
         #expect(prompt.contains("Session title: Server"))
+        #expect(prompt.contains("Open Ghostty sessions:"))
+        #expect(prompt.contains(sessionID.uuidString))
+        #expect(prompt.contains("buildbox"))
         #expect(prompt.contains("Working directory: /tmp/app"))
         #expect(prompt.contains("Visible buffer:"))
         #expect(prompt.contains("ready on http://localhost:3000"))
@@ -214,6 +233,18 @@ struct AITerminalManagerTests {
             ),
             visibleText: "npm run dev",
             screenText: "ready on http://localhost:3000",
+            availableSessions: [
+                ShannonRuntimeAvailableSessionContext(
+                    id: sessionID,
+                    title: "Server",
+                    hostID: AITerminalHost.local.id,
+                    hostLabel: "This Mac",
+                    workspaceID: nil,
+                    workingDirectory: "/tmp/app",
+                    managedState: .managedActive,
+                    isFocused: true
+                ),
+            ],
             availableHosts: [
                 ShannonRuntimeHostContext(
                     id: AITerminalHost.local.id,
@@ -260,6 +291,7 @@ struct AITerminalManagerTests {
     @Test func embeddedRuntimeRequestsApprovalBeforeRemoteTabCreation() async throws {
         let runtime = EmbeddedShannonRuntime()
         let sessionID = UUID()
+        let createdSessionID = UUID()
         let request = ShannonRuntimeRequest(
             userPrompt: "开一个到 buildbox 的新 tab",
             session: ShannonRuntimeSessionContext(
@@ -273,6 +305,18 @@ struct AITerminalManagerTests {
             ),
             visibleText: "",
             screenText: "$",
+            availableSessions: [
+                ShannonRuntimeAvailableSessionContext(
+                    id: sessionID,
+                    title: "Current",
+                    hostID: AITerminalHost.local.id,
+                    hostLabel: "This Mac",
+                    workspaceID: nil,
+                    workingDirectory: "/tmp/app",
+                    managedState: .managedActive,
+                    isFocused: true
+                ),
+            ],
             availableHosts: [
                 ShannonRuntimeHostContext(
                     id: AITerminalHost.local.id,
@@ -311,7 +355,9 @@ struct AITerminalManagerTests {
                     id: actionRequest.id,
                     result: ShannonActionExecutionResult(
                         success: true,
-                        output: "create_remote_tab · buildbox · buildbox"
+                        output: "create_remote_tab · buildbox · buildbox",
+                        sessionID: createdSessionID,
+                        sessionTitle: "buildbox"
                     )
                 )
             case .done(let result):
@@ -324,6 +370,515 @@ struct AITerminalManagerTests {
         #expect(approvalAction?.kind == .createRemoteTab)
         #expect(sawExecution)
         #expect(finalReply?.contains("buildbox") == true)
+        #expect(finalReply?.contains("托管") == true)
+    }
+
+    @Test func embeddedRuntimeChainsRemoteTabCreationIntoCommand() async throws {
+        let runtime = EmbeddedShannonRuntime()
+        let sessionID = UUID()
+        let createdSessionID = UUID()
+        let request = ShannonRuntimeRequest(
+            userPrompt: "开一个到 buildbox 的新 tab 然后运行 `pwd`",
+            session: ShannonRuntimeSessionContext(
+                id: sessionID,
+                title: "Current",
+                hostID: AITerminalHost.local.id,
+                hostLabel: "This Mac",
+                workspaceID: nil,
+                workingDirectory: "/tmp/app",
+                managedState: .managedActive
+            ),
+            visibleText: "",
+            screenText: "$",
+            availableSessions: [
+                ShannonRuntimeAvailableSessionContext(
+                    id: sessionID,
+                    title: "Current",
+                    hostID: AITerminalHost.local.id,
+                    hostLabel: "This Mac",
+                    workspaceID: nil,
+                    workingDirectory: "/tmp/app",
+                    managedState: .managedActive,
+                    isFocused: true
+                ),
+            ],
+            availableHosts: [
+                ShannonRuntimeHostContext(
+                    id: AITerminalHost.local.id,
+                    name: "This Mac",
+                    transport: .local,
+                    sshAlias: nil,
+                    hostname: nil,
+                    defaultDirectory: nil
+                ),
+                ShannonRuntimeHostContext(
+                    id: "ssh:buildbox",
+                    name: "buildbox",
+                    transport: .ssh,
+                    sshAlias: "buildbox",
+                    hostname: "10.0.0.5",
+                    defaultDirectory: "/srv/app"
+                ),
+            ],
+            availableWorkspaces: []
+        )
+
+        var approvalKinds: [ShannonProposedActionKind] = []
+        var actionKinds: [ShannonProposedActionKind] = []
+        var finalReply: String?
+        var finalSessionID: String?
+
+        for try await event in runtime.streamMessage(request) {
+            switch event {
+            case .approvalNeeded(let approval):
+                if let kind = approval.action?.kind {
+                    approvalKinds.append(kind)
+                }
+                try await runtime.submitApproval(id: approval.id, approved: true)
+            case .actionRequested(let actionRequest):
+                actionKinds.append(actionRequest.action.kind)
+
+                switch actionRequest.action.kind {
+                case .createRemoteTab:
+                    #expect(actionRequest.action.targetSessionID == sessionID)
+                    #expect(actionRequest.action.hostID == "ssh:buildbox")
+                    try await runtime.submitActionResult(
+                        id: actionRequest.id,
+                        result: ShannonActionExecutionResult(
+                            success: true,
+                            output: "create_remote_tab · buildbox · buildbox",
+                            sessionID: createdSessionID,
+                            sessionTitle: "buildbox"
+                        )
+                    )
+                case .sendCommand:
+                    #expect(actionRequest.action.targetSessionID == createdSessionID)
+                    #expect(actionRequest.action.payload == "pwd")
+                    try await runtime.submitActionResult(
+                        id: actionRequest.id,
+                        result: ShannonActionExecutionResult(
+                            success: true,
+                            output: "send_command · pwd"
+                        )
+                    )
+                default:
+                    Issue.record("Unexpected action kind: \(actionRequest.action.kind)")
+                }
+            case .done(let result):
+                finalReply = result.reply
+                finalSessionID = result.sessionID
+            default:
+                break
+            }
+        }
+
+        #expect(approvalKinds == [.createRemoteTab, .sendCommand])
+        #expect(actionKinds == [.createRemoteTab, .sendCommand])
+        #expect(finalSessionID == createdSessionID.uuidString)
+        #expect(finalReply?.contains("连续动作") == true)
+        #expect(finalReply?.contains("buildbox") == true)
+        #expect(finalReply?.contains("`pwd`") == true)
+    }
+
+    @Test func embeddedRuntimeChainsCommandIntoReadWithoutExtraApproval() async throws {
+        let runtime = EmbeddedShannonRuntime()
+        let sessionID = UUID()
+        let request = ShannonRuntimeRequest(
+            userPrompt: "运行 `pwd` 然后读取一下",
+            session: ShannonRuntimeSessionContext(
+                id: sessionID,
+                title: "Server",
+                hostID: AITerminalHost.local.id,
+                hostLabel: "This Mac",
+                workspaceID: nil,
+                workingDirectory: "/tmp/app",
+                managedState: .managedActive
+            ),
+            visibleText: "",
+            screenText: "$",
+            availableSessions: [
+                ShannonRuntimeAvailableSessionContext(
+                    id: sessionID,
+                    title: "Server",
+                    hostID: AITerminalHost.local.id,
+                    hostLabel: "This Mac",
+                    workspaceID: nil,
+                    workingDirectory: "/tmp/app",
+                    managedState: .managedActive,
+                    isFocused: true
+                ),
+            ],
+            availableHosts: [
+                ShannonRuntimeHostContext(
+                    id: AITerminalHost.local.id,
+                    name: "This Mac",
+                    transport: .local,
+                    sshAlias: nil,
+                    hostname: nil,
+                    defaultDirectory: nil
+                ),
+            ],
+            availableWorkspaces: []
+        )
+
+        var approvalKinds: [ShannonProposedActionKind] = []
+        var actionKinds: [ShannonProposedActionKind] = []
+        var finalReply: String?
+
+        for try await event in runtime.streamMessage(request) {
+            switch event {
+            case .approvalNeeded(let approval):
+                if let kind = approval.action?.kind {
+                    approvalKinds.append(kind)
+                }
+                try await runtime.submitApproval(id: approval.id, approved: true)
+            case .actionRequested(let actionRequest):
+                actionKinds.append(actionRequest.action.kind)
+
+                switch actionRequest.action.kind {
+                case .sendCommand:
+                    #expect(actionRequest.action.targetSessionID == sessionID)
+                    #expect(actionRequest.action.payload == "pwd")
+                    try await runtime.submitActionResult(
+                        id: actionRequest.id,
+                        result: ShannonActionExecutionResult(
+                            success: true,
+                            output: "send_command · pwd"
+                        )
+                    )
+                case .readTab:
+                    #expect(actionRequest.action.targetSessionID == sessionID)
+                    try await runtime.submitActionResult(
+                        id: actionRequest.id,
+                        result: ShannonActionExecutionResult(
+                            success: true,
+                            output: "Tab title: Server\nVisible buffer:\n/tmp/app"
+                        )
+                    )
+                default:
+                    Issue.record("Unexpected action kind: \(actionRequest.action.kind)")
+                }
+            case .done(let result):
+                finalReply = result.reply
+            default:
+                break
+            }
+        }
+
+        #expect(approvalKinds == [.sendCommand])
+        #expect(actionKinds == [.sendCommand, .readTab])
+        #expect(finalReply?.contains("连续动作") == true)
+        #expect(finalReply?.contains("`pwd`") == true)
+        #expect(finalReply?.contains("Tab title: Server") == true)
+    }
+
+    @Test func embeddedRuntimeReadsAnotherTabByNameWithoutApproval() async throws {
+        let runtime = EmbeddedShannonRuntime()
+        let currentSessionID = UUID()
+        let buildboxSessionID = UUID()
+        let request = ShannonRuntimeRequest(
+            userPrompt: "读取 buildbox 这个 tab",
+            session: ShannonRuntimeSessionContext(
+                id: currentSessionID,
+                title: "Current",
+                hostID: AITerminalHost.local.id,
+                hostLabel: "This Mac",
+                workspaceID: nil,
+                workingDirectory: "/tmp/app",
+                managedState: .managedActive
+            ),
+            visibleText: "",
+            screenText: "$",
+            availableSessions: [
+                ShannonRuntimeAvailableSessionContext(
+                    id: currentSessionID,
+                    title: "Current",
+                    hostID: AITerminalHost.local.id,
+                    hostLabel: "This Mac",
+                    workspaceID: nil,
+                    workingDirectory: "/tmp/app",
+                    managedState: .managedActive,
+                    isFocused: true
+                ),
+                ShannonRuntimeAvailableSessionContext(
+                    id: buildboxSessionID,
+                    title: "buildbox",
+                    hostID: "ssh:buildbox",
+                    hostLabel: "buildbox",
+                    workspaceID: nil,
+                    workingDirectory: "/srv/app",
+                    managedState: .managedActive,
+                    isFocused: false
+                ),
+            ],
+            availableHosts: [
+                ShannonRuntimeHostContext(
+                    id: AITerminalHost.local.id,
+                    name: "This Mac",
+                    transport: .local,
+                    sshAlias: nil,
+                    hostname: nil,
+                    defaultDirectory: nil
+                ),
+                ShannonRuntimeHostContext(
+                    id: "ssh:buildbox",
+                    name: "buildbox",
+                    transport: .ssh,
+                    sshAlias: "buildbox",
+                    hostname: "10.0.0.5",
+                    defaultDirectory: "/srv/app"
+                ),
+            ],
+            availableWorkspaces: []
+        )
+
+        var sawApproval = false
+        var finalReply: String?
+
+        for try await event in runtime.streamMessage(request) {
+            switch event {
+            case .approvalNeeded:
+                sawApproval = true
+            case .actionRequested(let actionRequest):
+                #expect(actionRequest.action.kind == .readTab)
+                #expect(actionRequest.action.targetSessionID == buildboxSessionID)
+                try await runtime.submitActionResult(
+                    id: actionRequest.id,
+                    result: ShannonActionExecutionResult(
+                        success: true,
+                        output: "Tab title: buildbox\nVisible buffer:\n/srv/app"
+                    )
+                )
+            case .done(let result):
+                finalReply = result.reply
+            default:
+                break
+            }
+        }
+
+        #expect(sawApproval == false)
+        #expect(finalReply?.contains("buildbox") == true)
+    }
+
+    @Test func embeddedRuntimeSendsCommandToAnotherTabWithApproval() async throws {
+        let runtime = EmbeddedShannonRuntime()
+        let currentSessionID = UUID()
+        let buildboxSessionID = UUID()
+        let request = ShannonRuntimeRequest(
+            userPrompt: "在 buildbox tab 运行 `pwd`",
+            session: ShannonRuntimeSessionContext(
+                id: currentSessionID,
+                title: "Current",
+                hostID: AITerminalHost.local.id,
+                hostLabel: "This Mac",
+                workspaceID: nil,
+                workingDirectory: "/tmp/app",
+                managedState: .managedActive
+            ),
+            visibleText: "",
+            screenText: "$",
+            availableSessions: [
+                ShannonRuntimeAvailableSessionContext(
+                    id: currentSessionID,
+                    title: "Current",
+                    hostID: AITerminalHost.local.id,
+                    hostLabel: "This Mac",
+                    workspaceID: nil,
+                    workingDirectory: "/tmp/app",
+                    managedState: .managedActive,
+                    isFocused: true
+                ),
+                ShannonRuntimeAvailableSessionContext(
+                    id: buildboxSessionID,
+                    title: "buildbox",
+                    hostID: "ssh:buildbox",
+                    hostLabel: "buildbox",
+                    workspaceID: nil,
+                    workingDirectory: "/srv/app",
+                    managedState: .managedActive,
+                    isFocused: false
+                ),
+            ],
+            availableHosts: [
+                ShannonRuntimeHostContext(
+                    id: AITerminalHost.local.id,
+                    name: "This Mac",
+                    transport: .local,
+                    sshAlias: nil,
+                    hostname: nil,
+                    defaultDirectory: nil
+                ),
+                ShannonRuntimeHostContext(
+                    id: "ssh:buildbox",
+                    name: "buildbox",
+                    transport: .ssh,
+                    sshAlias: "buildbox",
+                    hostname: "10.0.0.5",
+                    defaultDirectory: "/srv/app"
+                ),
+            ],
+            availableWorkspaces: []
+        )
+
+        var approvalArgs: String?
+        var finalReply: String?
+
+        for try await event in runtime.streamMessage(request) {
+            switch event {
+            case .approvalNeeded(let approval):
+                approvalArgs = approval.args
+                #expect(approval.action?.kind == .sendCommand)
+                #expect(approval.action?.targetSessionID == buildboxSessionID)
+                try await runtime.submitApproval(id: approval.id, approved: true)
+            case .actionRequested(let actionRequest):
+                #expect(actionRequest.action.kind == .sendCommand)
+                #expect(actionRequest.action.targetSessionID == buildboxSessionID)
+                #expect(actionRequest.action.payload == "pwd")
+                try await runtime.submitActionResult(
+                    id: actionRequest.id,
+                    result: ShannonActionExecutionResult(
+                        success: true,
+                        output: "send_command · pwd"
+                    )
+                )
+            case .done(let result):
+                finalReply = result.reply
+            default:
+                break
+            }
+        }
+
+        #expect(approvalArgs?.contains("buildbox") == true)
+        #expect(finalReply?.contains("send_command · pwd") == true)
+    }
+
+    @Test func shannonSessionHandoffMovesTaskBindingToNewTab() {
+        let sourceSessionID = UUID()
+        let targetSessionID = UUID()
+        let taskID = UUID()
+
+        var state = ShannonSessionHandoffState(
+            taskBindings: [sourceSessionID: taskID],
+            tasks: [
+            AITerminalTaskRecord(
+                id: taskID,
+                title: "Manage Source",
+                sessionID: sourceSessionID,
+                state: .active
+            ),
+            ],
+            registrations: [
+                sourceSessionID: AITerminalLaunchRegistration(
+                    hostID: AITerminalHost.local.id,
+                    workspaceID: nil,
+                    managedState: .managedActive,
+                    sourceLabel: "This Mac"
+                ),
+                targetSessionID: AITerminalLaunchRegistration(
+                    hostID: "ssh:buildbox",
+                    workspaceID: nil,
+                    managedState: .manual,
+                    sourceLabel: "buildbox"
+                ),
+            ],
+            selectedSessionID: sourceSessionID
+        )
+
+        AITerminalManagerStore.applyShannonSessionHandoff(
+            from: sourceSessionID,
+            to: targetSessionID,
+            targetSessionTitle: "buildbox",
+            state: &state
+        )
+
+        #expect(state.taskBindings[sourceSessionID] == nil)
+        #expect(state.taskBindings[targetSessionID] == taskID)
+        #expect(state.tasks.first?.sessionID == targetSessionID)
+        #expect(state.tasks.first?.title == L10n.AITerminalManager.manageSession("buildbox"))
+        #expect(state.registrations[sourceSessionID]?.managedState == .manual)
+        #expect(state.registrations[targetSessionID]?.managedState == .managedActive)
+        #expect(state.selectedSessionID == targetSessionID)
+    }
+
+    @Test func shannonTargetSessionAdoptionMovesTaskToExistingTab() {
+        let sourceSessionID = UUID()
+        let targetSessionID = UUID()
+        let taskID = UUID()
+        let sessions = [
+            AITerminalSessionSummary(
+                id: sourceSessionID,
+                title: "Current",
+                workingDirectory: "/tmp/app",
+                isFocused: true,
+                hostID: AITerminalHost.local.id,
+                hostLabel: "This Mac",
+                workspaceID: nil,
+                managedState: .managedActive,
+                taskID: taskID,
+                taskTitle: "Manage Current",
+                taskState: .active
+            ),
+            AITerminalSessionSummary(
+                id: targetSessionID,
+                title: "buildbox",
+                workingDirectory: "/srv/app",
+                isFocused: false,
+                hostID: "ssh:buildbox",
+                hostLabel: "buildbox",
+                workspaceID: nil,
+                managedState: .manual,
+                taskID: nil,
+                taskTitle: nil,
+                taskState: nil
+            ),
+        ]
+
+        var state = ShannonSessionHandoffState(
+            taskBindings: [sourceSessionID: taskID],
+            tasks: [
+                AITerminalTaskRecord(
+                    id: taskID,
+                    title: "Manage Current",
+                    sessionID: sourceSessionID,
+                    state: .active
+                ),
+            ],
+            registrations: [
+                sourceSessionID: AITerminalLaunchRegistration(
+                    hostID: AITerminalHost.local.id,
+                    workspaceID: nil,
+                    managedState: .managedActive,
+                    sourceLabel: "This Mac"
+                ),
+                targetSessionID: AITerminalLaunchRegistration(
+                    hostID: "ssh:buildbox",
+                    workspaceID: nil,
+                    managedState: .manual,
+                    sourceLabel: "buildbox"
+                ),
+            ],
+            selectedSessionID: sourceSessionID
+        )
+
+        let adoptedSessionID = AITerminalManagerStore.applyShannonTargetSessionAdoption(
+            for: ShannonProposedAction(
+                targetSessionID: targetSessionID,
+                kind: .sendCommand,
+                payload: "pwd"
+            ),
+            currentManagedSessionID: sourceSessionID,
+            sessions: sessions,
+            state: &state
+        )
+
+        #expect(adoptedSessionID == targetSessionID)
+        #expect(state.taskBindings[sourceSessionID] == nil)
+        #expect(state.taskBindings[targetSessionID] == taskID)
+        #expect(state.tasks.first?.sessionID == targetSessionID)
+        #expect(state.tasks.first?.title == L10n.AITerminalManager.manageSession("buildbox"))
+        #expect(state.registrations[sourceSessionID]?.managedState == .manual)
+        #expect(state.registrations[targetSessionID]?.managedState == .managedActive)
+        #expect(state.selectedSessionID == targetSessionID)
     }
 
     @Test @MainActor func storeSavesConfiguredHost() throws {
