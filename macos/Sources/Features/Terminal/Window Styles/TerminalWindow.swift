@@ -31,6 +31,14 @@ class TerminalWindow: NSWindow {
         return view
     }()
 
+    /// Green dot shown when the tab needs bell attention.
+    private lazy var tabBellIndicator: NSHostingView<TabBellIndicatorView> = {
+        let view = NSHostingView(rootView: TabBellIndicatorView())
+        view.translatesAutoresizingMaskIntoConstraints = false
+        view.isHidden = true
+        return view
+    }()
+
     /// The configuration derived from the Ghostty config so we don't need to rely on references.
     private(set) var derivedConfig: DerivedConfig = .init()
 
@@ -65,6 +73,14 @@ class TerminalWindow: NSWindow {
             guard tabColor != oldValue else { return }
             tabColorIndicator.rootView = TabColorIndicatorView(tabColor: tabColor)
             invalidateRestorableState()
+        }
+    }
+
+    /// Whether the tab should show the bell indicator dot.
+    var tabBellVisible: Bool = false {
+        didSet {
+            guard tabBellVisible != oldValue else { return }
+            tabBellIndicator.isHidden = !tabBellVisible
         }
     }
 
@@ -166,6 +182,7 @@ class TerminalWindow: NSWindow {
         stackView.setHuggingPriority(.defaultHigh, for: .horizontal)
         stackView.spacing = 4
         stackView.alignment = .centerY
+        stackView.addArrangedSubview(tabBellIndicator)
         stackView.addArrangedSubview(tabColorIndicator)
         stackView.addArrangedSubview(keyEquivalentLabel)
         stackView.addArrangedSubview(resetZoomTabButton)
@@ -697,6 +714,16 @@ private struct TabColorIndicatorView: View {
                 .frame(width: 6, height: 6)
                 .hidden()
         }
+    }
+}
+
+/// A small green dot displayed in the tab accessory view for bell attention.
+private struct TabBellIndicatorView: View {
+    var body: some View {
+        Circle()
+            .fill(Color(nsColor: .systemGreen))
+            .frame(width: 8, height: 8)
+            .accessibilityHidden(true)
     }
 }
 
