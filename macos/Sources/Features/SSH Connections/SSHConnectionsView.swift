@@ -105,9 +105,16 @@ struct SSHConnectionsView: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
-                    if displayRecentHosts.isEmpty && displaySavedHosts.isEmpty && displayImportedHosts.isEmpty {
+                    if displayFavoriteHosts.isEmpty && displayRecentHosts.isEmpty && displaySavedHosts.isEmpty && displayImportedHosts.isEmpty {
                         emptySidebarState
                     } else {
+                        if !displayFavoriteHosts.isEmpty {
+                            connectionsSection(
+                                title: L10n.AITerminalManager.favoriteHosts,
+                                hosts: displayFavoriteHosts
+                            )
+                        }
+
                         if !displayRecentHosts.isEmpty {
                             recentConnectionsSection
                         }
@@ -193,6 +200,12 @@ struct SSHConnectionsView: View {
                             .foregroundStyle(.primary)
                             .lineLimit(1)
 
+                        if store.isFavorite(host) {
+                            Image(systemName: "star.fill")
+                                .font(.caption)
+                                .foregroundStyle(Color.accentColor)
+                        }
+
                         if let recentRecord = store.recentRecord(for: host) {
                             statusPill(for: recentRecord)
                         }
@@ -241,6 +254,12 @@ struct SSHConnectionsView: View {
                             .font(.headline)
                             .foregroundStyle(.primary)
                             .lineLimit(1)
+
+                        if store.isFavorite(host) {
+                            Image(systemName: "star.fill")
+                                .font(.caption)
+                                .foregroundStyle(Color.accentColor)
+                        }
 
                         if hasActiveSession(for: host) {
                             Image(systemName: "wave.3.right.circle.fill")
@@ -345,6 +364,10 @@ struct SSHConnectionsView: View {
                     .controlSize(.large)
 
                     HStack(spacing: 8) {
+                        Button(store.isFavorite(host) ? L10n.AITerminalManager.removeFavoriteHost : L10n.AITerminalManager.favoriteHost) {
+                            store.toggleFavorite(host)
+                        }
+
                         Button(L10n.AITerminalManager.edit) {
                             beginEditing(host)
                         }
@@ -687,12 +710,22 @@ struct SSHConnectionsView: View {
     }
 
     private var displayRecentHosts: [AITerminalHost] {
-        Self.deduplicatedRecentHosts(filterHosts(store.recentHosts))
+        Self.sidebarRecentHosts(
+            recentHosts: filterHosts(store.recentHosts),
+            favoriteHosts: displayFavoriteHosts
+        )
+    }
+
+    private var displayFavoriteHosts: [AITerminalHost] {
+        Self.sidebarFavoriteHosts(
+            favoriteHosts: filterHosts(store.favoriteHosts)
+        )
     }
 
     private var displaySavedHosts: [AITerminalHost] {
         Self.sidebarSavedHosts(
             savedHosts: filterHosts(store.savedHosts),
+            favoriteHosts: displayFavoriteHosts,
             recentHosts: displayRecentHosts
         )
     }
@@ -700,6 +733,7 @@ struct SSHConnectionsView: View {
     private var displayImportedHosts: [AITerminalHost] {
         Self.sidebarImportedHosts(
             importedHosts: filterHosts(store.mergedImportedHosts),
+            favoriteHosts: displayFavoriteHosts,
             savedHosts: filterHosts(store.savedHosts),
             recentHosts: displayRecentHosts
         )
@@ -796,6 +830,20 @@ struct SSHConnectionsView: View {
 }
 
 extension SSHConnectionsView {
+    static func sidebarFavoriteHosts(
+        favoriteHosts: [AITerminalHost]
+    ) -> [AITerminalHost] {
+        deduplicatedRecentHosts(favoriteHosts, limit: favoriteHosts.count)
+    }
+
+    static func sidebarRecentHosts(
+        recentHosts: [AITerminalHost],
+        favoriteHosts: [AITerminalHost]
+    ) -> [AITerminalHost] {
+        let favoriteIDs = Set(favoriteHosts.map(\.id))
+        return deduplicatedRecentHosts(recentHosts.filter { !favoriteIDs.contains($0.id) })
+    }
+
     static func deduplicatedRecentHosts(
         _ recentHosts: [AITerminalHost],
         limit: Int = 3
@@ -815,18 +863,22 @@ extension SSHConnectionsView {
 
     static func sidebarSavedHosts(
         savedHosts: [AITerminalHost],
+        favoriteHosts: [AITerminalHost],
         recentHosts: [AITerminalHost]
     ) -> [AITerminalHost] {
-        let recentIDs = Set(recentHosts.map(\.id))
-        return savedHosts.filter { !recentIDs.contains($0.id) }
+        let hiddenIDs = Set(favoriteHosts.map(\.id)).union(recentHosts.map(\.id))
+        return savedHosts.filter { !hiddenIDs.contains($0.id) }
     }
 
     static func sidebarImportedHosts(
         importedHosts: [AITerminalHost],
+        favoriteHosts: [AITerminalHost],
         savedHosts: [AITerminalHost],
         recentHosts: [AITerminalHost]
     ) -> [AITerminalHost] {
-        let hiddenIDs = Set(savedHosts.map(\.id)).union(recentHosts.map(\.id))
+        let hiddenIDs = Set(savedHosts.map(\.id))
+            .union(recentHosts.map(\.id))
+            .union(favoriteHosts.map(\.id))
         return importedHosts.filter { !hiddenIDs.contains($0.id) }
     }
 }

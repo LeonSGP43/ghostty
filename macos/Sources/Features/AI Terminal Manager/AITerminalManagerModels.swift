@@ -526,14 +526,16 @@ struct AITerminalManagerConfiguration: Codable, Sendable {
     var schemaVersion: Int
     var savedHosts: [AITerminalHost]
     var importedHostOverrides: [AITerminalHost]
+    var favoriteHostIDs: [String]
     var recentHosts: [AITerminalRecentHostRecord]
     var workspaces: [AITerminalWorkspaceTemplate]
     var supervisor: ShannonSupervisorConfiguration
 
     init(
-        schemaVersion: Int = 1,
+        schemaVersion: Int = 2,
         savedHosts: [AITerminalHost] = [],
         importedHostOverrides: [AITerminalHost] = [],
+        favoriteHostIDs: [String] = [],
         recentHosts: [AITerminalRecentHostRecord] = [],
         workspaces: [AITerminalWorkspaceTemplate] = [],
         supervisor: ShannonSupervisorConfiguration = .init()
@@ -541,6 +543,7 @@ struct AITerminalManagerConfiguration: Codable, Sendable {
         self.schemaVersion = schemaVersion
         self.savedHosts = savedHosts
         self.importedHostOverrides = importedHostOverrides
+        self.favoriteHostIDs = favoriteHostIDs
         self.recentHosts = recentHosts
         self.workspaces = workspaces
         self.supervisor = supervisor
@@ -550,6 +553,7 @@ struct AITerminalManagerConfiguration: Codable, Sendable {
         case schemaVersion
         case savedHosts
         case importedHostOverrides
+        case favoriteHostIDs
         case recentHosts
         case workspaces
         case supervisor
@@ -563,6 +567,7 @@ struct AITerminalManagerConfiguration: Codable, Sendable {
             ?? container.decodeIfPresent([AITerminalHost].self, forKey: .hosts)
             ?? []
         importedHostOverrides = try container.decodeIfPresent([AITerminalHost].self, forKey: .importedHostOverrides) ?? []
+        favoriteHostIDs = try container.decodeIfPresent([String].self, forKey: .favoriteHostIDs) ?? []
         recentHosts = try container.decodeIfPresent([AITerminalRecentHostRecord].self, forKey: .recentHosts) ?? []
         workspaces = try container.decodeIfPresent([AITerminalWorkspaceTemplate].self, forKey: .workspaces) ?? []
         supervisor = try container.decodeIfPresent(ShannonSupervisorConfiguration.self, forKey: .supervisor) ?? .init()
@@ -573,6 +578,7 @@ struct AITerminalManagerConfiguration: Codable, Sendable {
         try container.encode(schemaVersion, forKey: .schemaVersion)
         try container.encode(savedHosts, forKey: .savedHosts)
         try container.encode(importedHostOverrides, forKey: .importedHostOverrides)
+        try container.encode(favoriteHostIDs, forKey: .favoriteHostIDs)
         try container.encode(recentHosts, forKey: .recentHosts)
         try container.encode(workspaces, forKey: .workspaces)
         try container.encode(supervisor, forKey: .supervisor)

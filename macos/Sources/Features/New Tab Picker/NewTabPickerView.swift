@@ -6,6 +6,7 @@ struct NewTabPickerView: View {
 
     let onClose: () -> Void
 
+    @State private var searchText = ""
     @State private var selectedID: String?
 
     var body: some View {
@@ -15,6 +16,12 @@ struct NewTabPickerView: View {
             Divider()
                 .overlay(Color(nsColor: .separatorColor).opacity(theme.isLight ? 0.24 : 0.34))
 
+            TextField(L10n.SSHConnections.newTabPickerSearch, text: $searchText)
+                .textFieldStyle(.roundedBorder)
+                .padding(.horizontal, 20)
+                .padding(.top, 16)
+                .padding(.bottom, 4)
+
             if entries.isEmpty {
                 emptyState
             } else {
@@ -22,6 +29,10 @@ struct NewTabPickerView: View {
                     VStack(alignment: .leading, spacing: 20) {
                         if let localEntry = entries.first(where: { $0.section == .local }) {
                             section(title: nil, entries: [localEntry])
+                        }
+
+                        if !favoriteEntries.isEmpty {
+                            section(title: L10n.AITerminalManager.favoriteHosts, entries: favoriteEntries)
                         }
 
                         if !recentEntries.isEmpty {
@@ -228,7 +239,11 @@ struct NewTabPickerView: View {
     }
 
     private var entries: [NewTabPickerEntry] {
-        store.newTabPickerEntries()
+        NewTabPickerModel.filteredEntries(store.newTabPickerEntries(), query: searchText)
+    }
+
+    private var favoriteEntries: [NewTabPickerEntry] {
+        entries.filter { $0.section == .favorites }
     }
 
     private var recentEntries: [NewTabPickerEntry] {
@@ -269,6 +284,8 @@ struct NewTabPickerView: View {
         switch entry.section {
         case .local:
             return nil
+        case .favorites:
+            return L10n.AITerminalManager.favoriteHosts
         case .recent:
             return L10n.AITerminalManager.recentHosts
         case .saved:

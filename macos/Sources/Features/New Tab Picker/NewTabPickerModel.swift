@@ -3,6 +3,7 @@ import Foundation
 struct NewTabPickerEntry: Identifiable, Hashable {
     enum Section: Hashable {
         case local
+        case favorites
         case recent
         case saved
         case imported
@@ -36,6 +37,7 @@ enum NewTabPickerModel {
     }
 
     static func entries(
+        favoriteHosts: [AITerminalHost],
         recentHosts: [AITerminalHost],
         savedHosts: [AITerminalHost],
         importedHosts: [AITerminalHost],
@@ -60,10 +62,29 @@ enum NewTabPickerModel {
             }
         }
 
+        append(favoriteHosts, section: .favorites)
         append(recentHosts, section: .recent)
         append(savedHosts, section: .saved)
         append(importedHosts, section: .imported)
 
         return entries
+    }
+
+    static func filteredEntries(
+        _ entries: [NewTabPickerEntry],
+        query: String
+    ) -> [NewTabPickerEntry] {
+        let normalizedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedQuery.isEmpty else { return entries }
+
+        return entries.filter { matches(host: $0.host, query: normalizedQuery) }
+    }
+
+    private static func matches(host: AITerminalHost, query: String) -> Bool {
+        host.name.localizedCaseInsensitiveContains(query)
+            || host.displaySubtitle.localizedCaseInsensitiveContains(query)
+            || (host.sshAlias?.localizedCaseInsensitiveContains(query) ?? false)
+            || (host.hostname?.localizedCaseInsensitiveContains(query) ?? false)
+            || (host.user?.localizedCaseInsensitiveContains(query) ?? false)
     }
 }

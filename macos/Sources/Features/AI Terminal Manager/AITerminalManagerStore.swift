@@ -127,11 +127,33 @@ final class AITerminalManagerStore: ObservableObject {
             .compactMap { lookup[$0.id] }
     }
 
+    var favoriteHosts: [AITerminalHost] {
+        let lookup = Dictionary(uniqueKeysWithValues: availableHosts.map { ($0.id, $0) })
+        return configuration.favoriteHostIDs.compactMap { lookup[$0] }
+    }
+
     func recentRecord(for host: AITerminalHost) -> AITerminalRecentHostRecord? {
         configuration.recentHosts
             .filter { $0.id == host.id }
             .sorted { $0.connectedAt > $1.connectedAt }
             .first
+    }
+
+    func isFavorite(_ host: AITerminalHost) -> Bool {
+        configuration.favoriteHostIDs.contains(host.id)
+    }
+
+    func toggleFavorite(_ host: AITerminalHost) {
+        guard !host.isLocal else { return }
+
+        if let index = configuration.favoriteHostIDs.firstIndex(of: host.id) {
+            configuration.favoriteHostIDs.remove(at: index)
+        } else {
+            configuration.favoriteHostIDs.append(host.id)
+        }
+
+        persistConfiguration()
+        rebuildSessions()
     }
 
     func hasStoredPassword(for host: AITerminalHost) -> Bool {
@@ -214,6 +236,7 @@ final class AITerminalManagerStore: ObservableObject {
 
     func newTabPickerEntries() -> [NewTabPickerEntry] {
         NewTabPickerModel.entries(
+            favoriteHosts: favoriteHosts,
             recentHosts: recentHosts,
             savedHosts: savedHosts,
             importedHosts: mergedImportedHosts
@@ -439,6 +462,7 @@ final class AITerminalManagerStore: ObservableObject {
         }
         configuration.savedHosts.removeAll { $0.id == host.id }
         configuration.importedHostOverrides.removeAll { $0.id == host.id }
+        configuration.favoriteHostIDs.removeAll { $0 == host.id }
         configuration.recentHosts.removeAll { $0.id == host.id }
         if !importedSSHHosts.contains(where: { $0.id == host.id }) {
             configuration.workspaces.removeAll { $0.hostID == host.id }
@@ -456,6 +480,7 @@ final class AITerminalManagerStore: ObservableObject {
             return
         }
         configuration.importedHostOverrides.removeAll { $0.id == host.id }
+        configuration.favoriteHostIDs.removeAll { $0 == host.id }
         configuration.recentHosts.removeAll { $0.id == host.id }
         lastError = nil
         persistConfiguration()
@@ -1683,10 +1708,14 @@ final class AITerminalManagerStore: ObservableObject {
         let importedIDs = Set(importedHosts.map(\.id))
         let savedIDs = Set(configuration.savedHosts.map(\.id))
         let allowedRecentIDs = importedIDs.union(savedIDs)
+        let allowedFavoriteIDs = importedIDs.union(savedIDs)
 
         var next = configuration
         next.importedHostOverrides = configuration.importedHostOverrides.filter {
             importedIDs.contains($0.id)
+        }
+        next.favoriteHostIDs = configuration.favoriteHostIDs.filter {
+            allowedFavoriteIDs.contains($0)
         }
         next.recentHosts = configuration.recentHosts.filter {
             allowedRecentIDs.contains($0.id)
