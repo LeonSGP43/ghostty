@@ -171,6 +171,13 @@ V1 目标不是做成完整分布式运维平台，而是先交付一个**高性
   - 新建 tab 后会把原 Shannon task binding 迁移到新 tab
   - 主控选中态会切到新 tab
   - 后续 Shannon 动作会继续以新 tab 为目标
+- 当前 embedded Shannon runtime 已能看见 Ghostty 全量 open sessions：
+  - runtime request 会携带所有已打开 tab/session 的 title、host、workspace、managed state
+  - Shannon 可按 tab 名称 / host / workspace / working directory 解析目标 tab
+  - 现已支持对其他已存在 tab 发起 `read` / `focus` / `send command` / `send input` / `close` 规划
+- 当前跨 tab 状态变更会同步切换托管目标：
+  - 若 Shannon 决定操作另一个已存在 tab，Ghostty 会把 task binding 和审批状态切到目标 tab
+  - 不会继续把审批与任务状态错误挂在原 tab 上
 - 当前 embedded Shannon runtime 已支持最小多步动作链：
   - `create_remote_tab -> send_command`
   - `create_remote_tab -> read_tab`
@@ -186,13 +193,16 @@ V1 目标不是做成完整分布式运维平台，而是先交付一个**高性
   - `embeddedRuntimeRequestsApprovalBeforeRemoteTabCreation` 单测通过
   - `embeddedRuntimeChainsRemoteTabCreationIntoCommand` 单测通过
   - `embeddedRuntimeChainsCommandIntoReadWithoutExtraApproval` 单测通过
+  - `embeddedRuntimeReadsAnotherTabByNameWithoutApproval` 单测通过
+  - `embeddedRuntimeSendsCommandToAnotherTabWithApproval` 单测通过
   - `shannonSessionHandoffMovesTaskBindingToNewTab` 单测通过
+  - `shannonTargetSessionAdoptionMovesTaskToExistingTab` 单测通过
   - `AITerminalManagerTests` 全量已可通过 `xcodebuild` 稳定退出
 
 ### 当前限制
 
 - Shannon 已不再只是 supervisor scaffold，但当前 embedded runtime 仍是**本地实现版 Shannon 主脑骨架**，还不是完整 production-grade Shannon workflow
-- `Ghostty Native Bridge + Shannon Runtime` 的真实接线已经启动，但仍只覆盖第一批动作和单 tab 为主的执行链
+- `Ghostty Native Bridge + Shannon Runtime` 的真实接线已经启动，但动作覆盖仍处于 V1 范围，尚未形成更复杂的全局调度策略
 - `shan` 仅作为参考实现，不再作为当前代码路径的必改依赖
 - 远程 tab 当前通过 shell 启动后发送 `ssh ...` 初始输入完成，不是深度 SSH transport
 - tab 输出读取目前以 Ghostty 已有文本缓存为主，尚未引入更细粒度事件流建模
