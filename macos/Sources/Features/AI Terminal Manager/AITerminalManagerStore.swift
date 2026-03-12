@@ -15,7 +15,6 @@ final class AITerminalManagerStore: ObservableObject {
     @Published private(set) var remoteSessions: [AITerminalRemoteSessionSummary] = []
     @Published private(set) var sessions: [AITerminalSessionSummary] = []
     @Published private(set) var tasks: [AITerminalTaskRecord] = []
-    @Published private(set) var supervisorState: ShannonSupervisorState = .unavailable
     @Published private(set) var selectedSessionID: UUID?
     @Published private(set) var selectedSessionVisibleText = ""
     @Published private(set) var selectedSessionScreenText = ""
@@ -26,12 +25,10 @@ final class AITerminalManagerStore: ObservableObject {
     private let configurationURL: URL
     private let sshConfigHostLoader: () -> [AITerminalHost]
     private let credentialStore: SSHConnectionCredentialStore
-    private let supervisor = ShannonSupervisor()
     private var registrations: [UUID: AITerminalLaunchRegistration] = [:]
     private var sshSessionAuthStates: [UUID: AITerminalSSHSessionAuthState] = [:]
     private var pendingSSHPasswordAutomations: [UUID: PendingSSHPasswordAutomation] = [:]
     private var taskBindings: [UUID: UUID] = [:]
-    private var pollingTimer: Timer?
 
     init(
         appDelegateProvider: @escaping () -> AppDelegate?,
@@ -45,11 +42,6 @@ final class AITerminalManagerStore: ObservableObject {
         self.credentialStore = credentialStore
         self.configuration = (try? Self.loadConfiguration(from: self.configurationURL)) ?? .empty
         refresh()
-        startPolling()
-    }
-
-    deinit {
-        pollingTimer?.invalidate()
     }
 
     var availableHosts: [AITerminalHost] {
@@ -173,14 +165,6 @@ final class AITerminalManagerStore: ObservableObject {
 
         importedSSHHosts = sshConfigHostLoader()
         reconcileImportedState()
-        supervisor.updateAvailability(for: configuration.supervisor)
-        supervisorState = supervisor.state
-
-        if configuration.supervisor.autoStart, case .stopped = supervisor.state {
-            supervisor.start(configuration: configuration.supervisor)
-            supervisorState = supervisor.state
-        }
-
         rebuildSessions()
     }
 
@@ -199,8 +183,6 @@ final class AITerminalManagerStore: ObservableObject {
         open(host: host, directoryOverride: nil)
     }
 
-<<<<<<< HEAD
-=======
     func openInNewTab(host: AITerminalHost) {
         if host.isLocal {
             openLocalShell(launchTarget: .tab)
@@ -221,10 +203,21 @@ final class AITerminalManagerStore: ObservableObject {
         }
     }
 
->>>>>>> 11c8fb186 (feat(macos): add ssh workbench favorites and picker search)
     func open(host: AITerminalHost, directoryOverride: String?) {
+        open(host: host, directoryOverride: directoryOverride, launchTarget: launchTarget)
+    }
+
+    func openLocalShell(launchTarget: AITerminalLaunchTarget) {
+        _ = launch(.localShell(), target: launchTarget)
+    }
+
+    private func open(
+        host: AITerminalHost,
+        directoryOverride: String?,
+        launchTarget: AITerminalLaunchTarget
+    ) {
         if host.isLocal {
-            openLocalShell()
+            openLocalShell(launchTarget: launchTarget)
             return
         }
 
@@ -242,7 +235,7 @@ final class AITerminalManagerStore: ObservableObject {
             return
         }
 
-        guard let sessionID = launch(plan) else { return }
+        guard let sessionID = launch(plan, target: launchTarget) else { return }
         registerRemoteSession(sessionID, host: host, savedPassword: savedPassword)
         recordRecentHost(host.id, status: .connected)
     }
@@ -705,25 +698,18 @@ final class AITerminalManagerStore: ObservableObject {
         rebuildSessions()
     }
 
-    func startSupervisor() {
-        supervisor.start(configuration: configuration.supervisor)
-        supervisorState = supervisor.state
-    }
-
-    func stopSupervisor() {
-        supervisor.stop()
-        supervisorState = supervisor.state
-    }
-
     @discardableResult
-    private func launch(_ plan: AITerminalLaunchPlan) -> UUID? {
+    private func launch(
+        _ plan: AITerminalLaunchPlan,
+        target: AITerminalLaunchTarget? = nil
+    ) -> UUID? {
         guard let appDelegate = appDelegateProvider() else {
             lastError = L10n.AITerminalManager.appDelegateUnavailable
             return nil
         }
 
         let createdSurface: Ghostty.SurfaceView?
-        switch launchTarget {
+        switch target ?? launchTarget {
         case .tab:
             if let controller = TerminalController.newTab(
                 appDelegate.ghostty,
@@ -814,20 +800,6 @@ final class AITerminalManagerStore: ObservableObject {
             self.selectedSessionID = nil
             selectedSessionVisibleText = ""
             selectedSessionScreenText = ""
-        }
-
-        supervisorState = supervisor.state
-    }
-
-    private func startPolling() {
-        pollingTimer?.invalidate()
-        pollingTimer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: true) { [weak self] _ in
-            Task { @MainActor in
-                self?.rebuildSessions()
-            }
-        }
-        if let pollingTimer {
-            RunLoop.main.add(pollingTimer, forMode: .common)
         }
     }
 

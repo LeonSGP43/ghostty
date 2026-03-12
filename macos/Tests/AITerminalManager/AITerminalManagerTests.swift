@@ -240,8 +240,6 @@ struct AITerminalManagerTests {
         #expect(displayImported.map(\.id) == ["ssh:imported"])
     }
 
-<<<<<<< HEAD
-=======
     @Test func newTabPickerEntriesKeepLocalFirstAndSectionOrder() {
         let recent = [
             AITerminalHost(
@@ -319,8 +317,6 @@ struct AITerminalManagerTests {
 
         #expect(entries.map(\.id) == ["local"])
     }
-
->>>>>>> 11c8fb186 (feat(macos): add ssh workbench favorites and picker search)
     @Test @MainActor func storeSavesHostWithoutExplicitName() {
         let tempURL = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString)

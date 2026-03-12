@@ -252,25 +252,6 @@ struct AITerminalWorkspaceTemplate: Identifiable, Codable, Hashable, Sendable {
     var directory: String
 }
 
-struct ShannonSupervisorConfiguration: Codable, Hashable, Sendable {
-    var binaryPath: String?
-    var arguments: [String]
-    var autoStart: Bool
-    var environment: [String: String]
-
-    init(
-        binaryPath: String? = ProcessInfo.processInfo.environment["GHOSTTY_SHANNON_PATH"],
-        arguments: [String] = [],
-        autoStart: Bool = false,
-        environment: [String: String] = [:]
-    ) {
-        self.binaryPath = binaryPath
-        self.arguments = arguments
-        self.autoStart = autoStart
-        self.environment = environment
-    }
-}
-
 struct AITerminalManagerConfiguration: Codable, Sendable {
     var schemaVersion: Int
     var savedHosts: [AITerminalHost]
@@ -278,7 +259,6 @@ struct AITerminalManagerConfiguration: Codable, Sendable {
     var favoriteHostIDs: [String]
     var recentHosts: [AITerminalRecentHostRecord]
     var workspaces: [AITerminalWorkspaceTemplate]
-    var supervisor: ShannonSupervisorConfiguration
 
     init(
         schemaVersion: Int = 2,
@@ -286,8 +266,7 @@ struct AITerminalManagerConfiguration: Codable, Sendable {
         importedHostOverrides: [AITerminalHost] = [],
         favoriteHostIDs: [String] = [],
         recentHosts: [AITerminalRecentHostRecord] = [],
-        workspaces: [AITerminalWorkspaceTemplate] = [],
-        supervisor: ShannonSupervisorConfiguration = .init()
+        workspaces: [AITerminalWorkspaceTemplate] = []
     ) {
         self.schemaVersion = schemaVersion
         self.savedHosts = savedHosts
@@ -295,7 +274,6 @@ struct AITerminalManagerConfiguration: Codable, Sendable {
         self.favoriteHostIDs = favoriteHostIDs
         self.recentHosts = recentHosts
         self.workspaces = workspaces
-        self.supervisor = supervisor
     }
 
     enum CodingKeys: String, CodingKey {
@@ -305,7 +283,6 @@ struct AITerminalManagerConfiguration: Codable, Sendable {
         case favoriteHostIDs
         case recentHosts
         case workspaces
-        case supervisor
         case hosts
     }
 
@@ -319,7 +296,6 @@ struct AITerminalManagerConfiguration: Codable, Sendable {
         favoriteHostIDs = try container.decodeIfPresent([String].self, forKey: .favoriteHostIDs) ?? []
         recentHosts = try container.decodeIfPresent([AITerminalRecentHostRecord].self, forKey: .recentHosts) ?? []
         workspaces = try container.decodeIfPresent([AITerminalWorkspaceTemplate].self, forKey: .workspaces) ?? []
-        supervisor = try container.decodeIfPresent(ShannonSupervisorConfiguration.self, forKey: .supervisor) ?? .init()
     }
 
     func encode(to encoder: Encoder) throws {
@@ -330,7 +306,6 @@ struct AITerminalManagerConfiguration: Codable, Sendable {
         try container.encode(favoriteHostIDs, forKey: .favoriteHostIDs)
         try container.encode(recentHosts, forKey: .recentHosts)
         try container.encode(workspaces, forKey: .workspaces)
-        try container.encode(supervisor, forKey: .supervisor)
     }
 }
 

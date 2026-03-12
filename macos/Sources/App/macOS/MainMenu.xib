@@ -104,12 +104,6 @@
                                     <action selector="showSSHConnections:" target="bbz-4X-AYv" id="xJr-2n-uJ4"/>
                                 </connections>
                             </menuItem>
-                            <menuItem title="AI Terminal Manager…" id="QwL-Z6-I6A">
-                                <modifierMask key="keyEquivalentModifierMask"/>
-                                <connections>
-                                    <action selector="showAITerminalManager:" target="bbz-4X-AYv" id="m2D-Rh-VkW"/>
-                                </connections>
-                            </menuItem>
                             <menuItem title="Reload Configuration" id="KKH-XX-5py">
                                 <modifierMask key="keyEquivalentModifierMask"/>
                                 <connections>

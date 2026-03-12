@@ -141,10 +141,6 @@ class AppDelegate: NSObject,
         appDelegateProvider: { [weak self] in self }
     )
 
-    @MainActor lazy var aiTerminalManagerController = AITerminalManagerController(
-        store: aiTerminalManagerStore
-    )
-
     @MainActor lazy var sshConnectionsController = SSHConnectionsController(
         store: aiTerminalManagerStore
     )

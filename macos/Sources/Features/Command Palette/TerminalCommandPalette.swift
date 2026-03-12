@@ -90,13 +90,6 @@ struct TerminalCommandPaletteView: View {
             ) {
                 (NSApp.delegate as? AppDelegate)?.showSSHConnections(nil)
             },
-            CommandOption(
-                title: L10n.CommandPalette.aiManagerTitle,
-                description: L10n.CommandPalette.aiManagerDescription,
-                leadingIcon: "sparkles.rectangle.stack"
-            ) {
-                (NSApp.delegate as? AppDelegate)?.showAITerminalManager(nil)
-            },
         ]
     }
 
