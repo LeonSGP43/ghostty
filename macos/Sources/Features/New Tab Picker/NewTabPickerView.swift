@@ -190,7 +190,7 @@ struct NewTabPickerView: View {
 
     private var footer: some View {
         HStack {
-            Text("↩︎ \(L10n.AITerminalManager.connect) · Esc \(L10n.Common.cancel)")
+            Text("↩︎ \(L10n.AITerminalManager.connect) · Esc \(L10n.Common.cancel) · \(L10n.SSHConnections.newTabPickerQuickConnect)")
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
@@ -231,6 +231,12 @@ struct NewTabPickerView: View {
                     Button { open(entry) } label: { Color.clear }
                         .buttonStyle(.plain)
                         .keyboardShortcut(key, modifiers: [])
+                        .frame(width: 0, height: 0)
+                        .accessibilityHidden(true)
+
+                    Button { open(entry) } label: { Color.clear }
+                        .buttonStyle(.plain)
+                        .keyboardShortcut(key, modifiers: [.command])
                         .frame(width: 0, height: 0)
                         .accessibilityHidden(true)
                 }
