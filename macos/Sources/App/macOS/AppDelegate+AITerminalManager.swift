@@ -2,6 +2,6 @@ import AppKit
 
 extension AppDelegate {
     @IBAction func showAITerminalManager(_ sender: Any?) {
-        aiTerminalManagerController.show()
+        aiTerminalManagerController.show(tabbedInto: TerminalController.preferredParent?.window)
     }
 }

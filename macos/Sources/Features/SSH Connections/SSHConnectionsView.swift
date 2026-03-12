@@ -883,32 +883,6 @@ extension SSHConnectionsView {
     }
 }
 
-private extension View {
-    func panelSurface() -> some View {
-        self
-            .background(
-                Color.white.opacity(0.08),
-                in: RoundedRectangle(cornerRadius: 22)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 22)
-                    .stroke(Color(nsColor: .separatorColor).opacity(0.18), lineWidth: 1)
-            )
-    }
-
-    func subpanelSurface() -> some View {
-        self
-            .background(
-                Color.white.opacity(0.1),
-                in: RoundedRectangle(cornerRadius: 16)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 16)
-                    .stroke(Color(nsColor: .separatorColor).opacity(0.14), lineWidth: 1)
-            )
-    }
-}
-
 #Preview {
     SSHConnectionsView()
         .environmentObject(
