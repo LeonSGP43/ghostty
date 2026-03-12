@@ -167,6 +167,10 @@ V1 目标不是做成完整分布式运维平台，而是先交付一个**高性
   - 需要提权的动作先进入 Ghostty 审批
   - Ghostty 原生执行动作
   - 执行结果再回传给 embedded Shannon runtime
+- 当前 `create_*_tab` 动作已支持托管交接：
+  - 新建 tab 后会把原 Shannon task binding 迁移到新 tab
+  - 主控选中态会切到新 tab
+  - 后续 Shannon 动作会继续以新 tab 为目标
 - 当前已新增的新建 tab 入口：
   - `New Tab Picker`
   - 支持本地 shell、recent host、saved host、imported host
@@ -175,7 +179,8 @@ V1 目标不是做成完整分布式运维平台，而是先交付一个**高性
   - `swiftlint` 通过
   - `embeddedRuntimeRequestsReadTabWithoutApproval` 单测通过
   - `embeddedRuntimeRequestsApprovalBeforeRemoteTabCreation` 单测通过
-  - `AITerminalManagerTests` 全量在当前机器上仍存在偶发 `xcodebuild` runner 卡住问题，因此以定向测试结果为准
+  - `shannonSessionHandoffMovesTaskBindingToNewTab` 单测通过
+  - `AITerminalManagerTests` 全量已可通过 `xcodebuild` 稳定退出
 
 ### 当前限制
 
@@ -184,7 +189,7 @@ V1 目标不是做成完整分布式运维平台，而是先交付一个**高性
 - `shan` 仅作为参考实现，不再作为当前代码路径的必改依赖
 - 远程 tab 当前通过 shell 启动后发送 `ssh ...` 初始输入完成，不是深度 SSH transport
 - tab 输出读取目前以 Ghostty 已有文本缓存为主，尚未引入更细粒度事件流建模
-- `create_*_tab` 之后还没有把新 tab 自动纳入更完整的 Shannon 后续任务链
+- embedded Shannon runtime 仍以单轮规划为主，尚未形成更完整的多步 agent loop
 - 环境若缺少完整 macOS/Xcode 测试条件，则运行时验证需要你本机手动启动 app 检查
 
 ## Key Changes
