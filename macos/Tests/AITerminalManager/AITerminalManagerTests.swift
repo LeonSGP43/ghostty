@@ -37,6 +37,14 @@ struct AITerminalManagerTests {
         #expect(configuration.importedHostOverrides.isEmpty)
     }
 
+    @Test func decodesLegacyConfigurationWithoutFavorites() throws {
+        let data = Data(#"{"schemaVersion":1,"savedHosts":[{"id":"ssh:buildbox","name":"Buildbox","transport":"ssh","sshAlias":"buildbox","hostname":"10.0.0.5","user":"deploy","port":2222,"defaultDirectory":"/srv/app","source":"configuration_file"}],"importedHostOverrides":[],"recentHosts":[],"workspaces":[],"supervisor":{"arguments":[],"autoStart":false,"environment":{}}}"#.utf8)
+        let configuration = try JSONDecoder().decode(AITerminalManagerConfiguration.self, from: data)
+
+        #expect(configuration.favoriteHostIDs.isEmpty)
+        #expect(configuration.savedHosts.map(\.id) == ["ssh:buildbox"])
+    }
+
     @Test func parsesSSHConfigHosts() {
         let config = #"""
         Host *
@@ -217,10 +225,12 @@ struct AITerminalManagerTests {
         let displayRecent = SSHConnectionsView.deduplicatedRecentHosts(recent)
         let displaySaved = SSHConnectionsView.sidebarSavedHosts(
             savedHosts: saved,
+            favoriteHosts: [],
             recentHosts: displayRecent
         )
         let displayImported = SSHConnectionsView.sidebarImportedHosts(
             importedHosts: imported,
+            favoriteHosts: [],
             savedHosts: saved,
             recentHosts: displayRecent
         )
@@ -230,6 +240,87 @@ struct AITerminalManagerTests {
         #expect(displayImported.map(\.id) == ["ssh:imported"])
     }
 
+<<<<<<< HEAD
+=======
+    @Test func newTabPickerEntriesKeepLocalFirstAndSectionOrder() {
+        let recent = [
+            AITerminalHost(
+                id: "ssh:recent",
+                name: "Recent",
+                transport: .ssh,
+                sshAlias: "recent",
+                hostname: "10.0.0.1",
+                user: "leon",
+                port: 22,
+                defaultDirectory: nil,
+                source: .configurationFile
+            ),
+        ]
+        let saved = [
+            recent[0],
+            AITerminalHost(
+                id: "ssh:saved",
+                name: "Saved",
+                transport: .ssh,
+                sshAlias: "saved",
+                hostname: "10.0.0.2",
+                user: "leon",
+                port: 22,
+                defaultDirectory: nil,
+                source: .configurationFile
+            ),
+        ]
+        let imported = [
+            saved[1],
+            AITerminalHost(
+                id: "ssh:imported",
+                name: "Imported",
+                transport: .ssh,
+                sshAlias: "imported",
+                hostname: "10.0.0.3",
+                user: "leon",
+                port: 22,
+                defaultDirectory: nil,
+                source: .sshConfig
+            ),
+        ]
+
+        let entries = NewTabPickerModel.entries(
+            favoriteHosts: [],
+            recentHosts: recent,
+            savedHosts: saved,
+            importedHosts: imported
+        ) { _ in false }
+
+        #expect(entries.map(\.id) == ["local", "ssh:recent", "ssh:saved", "ssh:imported"])
+        #expect(entries.map(\.shortcutIndex) == [1, 2, 3, 4])
+    }
+
+    @Test func newTabPickerEntriesExcludePasswordHostsWithoutStoredSecret() {
+        let missingPasswordHost = AITerminalHost(
+            id: "ssh:password",
+            name: "Password",
+            transport: .ssh,
+            sshAlias: nil,
+            hostname: "10.0.0.4",
+            user: "leon",
+            port: 22,
+            defaultDirectory: nil,
+            source: .configurationFile,
+            authMode: .password
+        )
+
+        let entries = NewTabPickerModel.entries(
+            favoriteHosts: [],
+            recentHosts: [],
+            savedHosts: [missingPasswordHost],
+            importedHosts: []
+        ) { _ in false }
+
+        #expect(entries.map(\.id) == ["local"])
+    }
+
+>>>>>>> 11c8fb186 (feat(macos): add ssh workbench favorites and picker search)
     @Test @MainActor func storeSavesHostWithoutExplicitName() {
         let tempURL = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString)
@@ -520,6 +611,199 @@ struct AITerminalManagerTests {
 
         #expect(reconciled.importedHostOverrides.map(\.id) == ["ssh:keep"])
         #expect(reconciled.recentHosts.map(\.id) == ["ssh:keep", "ssh:saved"])
+    }
+
+    @Test func reconcilesFavoriteHostsAndDropsInvalidIDs() {
+        let configuration = AITerminalManagerConfiguration(
+            savedHosts: [
+                AITerminalHost(
+                    id: "ssh:saved",
+                    name: "Saved",
+                    transport: .ssh,
+                    sshAlias: "saved",
+                    hostname: nil,
+                    user: nil,
+                    port: nil,
+                    defaultDirectory: nil,
+                    source: .configurationFile
+                ),
+            ],
+            importedHostOverrides: [
+                AITerminalHost(
+                    id: "ssh:keep",
+                    name: "Keep Override",
+                    transport: .ssh,
+                    sshAlias: "keep",
+                    hostname: nil,
+                    user: nil,
+                    port: nil,
+                    defaultDirectory: nil,
+                    source: .configurationFile
+                ),
+            ],
+            favoriteHostIDs: ["ssh:keep", "ssh:saved", "ssh:stale"],
+            recentHosts: []
+        )
+
+        let importedHosts = [
+            AITerminalHost(
+                id: "ssh:keep",
+                name: "Keep",
+                transport: .ssh,
+                sshAlias: "keep",
+                hostname: nil,
+                user: nil,
+                port: nil,
+                defaultDirectory: nil,
+                source: .sshConfig
+            ),
+        ]
+
+        let reconciled = AITerminalManagerStore.reconciledConfiguration(
+            configuration,
+            importedHosts: importedHosts
+        )
+
+        #expect(reconciled.favoriteHostIDs == ["ssh:keep", "ssh:saved"])
+    }
+
+    @Test func newTabPickerFavoritesPrecedeOtherSectionsAndDeduplicateHosts() {
+        let favorite = AITerminalHost(
+            id: "ssh:favorite",
+            name: "Favorite",
+            transport: .ssh,
+            sshAlias: "favorite",
+            hostname: "10.0.0.10",
+            user: "leon",
+            port: 22,
+            defaultDirectory: nil,
+            source: .configurationFile
+        )
+        let recent = [
+            favorite,
+            AITerminalHost(
+                id: "ssh:recent",
+                name: "Recent",
+                transport: .ssh,
+                sshAlias: "recent",
+                hostname: "10.0.0.11",
+                user: "leon",
+                port: 22,
+                defaultDirectory: nil,
+                source: .configurationFile
+            ),
+        ]
+        let saved = [
+            favorite,
+            recent[1],
+            AITerminalHost(
+                id: "ssh:saved",
+                name: "Saved",
+                transport: .ssh,
+                sshAlias: "saved",
+                hostname: "10.0.0.12",
+                user: "leon",
+                port: 22,
+                defaultDirectory: nil,
+                source: .configurationFile
+            ),
+        ]
+        let imported = [
+            saved[2],
+            AITerminalHost(
+                id: "ssh:imported",
+                name: "Imported",
+                transport: .ssh,
+                sshAlias: "imported",
+                hostname: "10.0.0.13",
+                user: "leon",
+                port: 22,
+                defaultDirectory: nil,
+                source: .sshConfig
+            ),
+        ]
+
+        let entries = NewTabPickerModel.entries(
+            favoriteHosts: [favorite],
+            recentHosts: recent,
+            savedHosts: saved,
+            importedHosts: imported
+        ) { _ in true }
+
+        #expect(entries.map(\.id) == ["local", "ssh:favorite", "ssh:recent", "ssh:saved", "ssh:imported"])
+        #expect(entries.map(\.section) == [.local, .favorites, .recent, .saved, .imported])
+        #expect(entries.map(\.shortcutIndex) == [1, 2, 3, 4, 5])
+    }
+
+    @Test func sidebarGroupingHidesFavoritesFromRecentSavedAndImported() {
+        let favorite = AITerminalHost(
+            id: "ssh:favorite",
+            name: "Favorite",
+            transport: .ssh,
+            sshAlias: "favorite",
+            hostname: "10.0.0.10",
+            user: "leon",
+            port: 22,
+            defaultDirectory: nil,
+            source: .configurationFile
+        )
+        let recentOnly = AITerminalHost(
+            id: "ssh:recent",
+            name: "Recent",
+            transport: .ssh,
+            sshAlias: "recent",
+            hostname: "10.0.0.11",
+            user: "leon",
+            port: 22,
+            defaultDirectory: nil,
+            source: .configurationFile
+        )
+        let savedOnly = AITerminalHost(
+            id: "ssh:saved",
+            name: "Saved",
+            transport: .ssh,
+            sshAlias: "saved",
+            hostname: "10.0.0.12",
+            user: "leon",
+            port: 22,
+            defaultDirectory: nil,
+            source: .configurationFile
+        )
+        let importedOnly = AITerminalHost(
+            id: "ssh:imported",
+            name: "Imported",
+            transport: .ssh,
+            sshAlias: "imported",
+            hostname: "10.0.0.13",
+            user: "leon",
+            port: 22,
+            defaultDirectory: nil,
+            source: .sshConfig
+        )
+
+        let favorites = SSHConnectionsView.sidebarFavoriteHosts(
+            favoriteHosts: [favorite, favorite]
+        )
+        let recent = SSHConnectionsView.sidebarRecentHosts(
+            recentHosts: [favorite, recentOnly, recentOnly],
+            favoriteHosts: favorites
+        )
+        let saved = SSHConnectionsView.sidebarSavedHosts(
+            savedHosts: [favorite, recentOnly, savedOnly],
+            favoriteHosts: favorites,
+            recentHosts: recent
+        )
+        let imported = SSHConnectionsView.sidebarImportedHosts(
+            importedHosts: [favorite, recentOnly, savedOnly, importedOnly],
+            favoriteHosts: favorites,
+            savedHosts: [favorite, recentOnly, savedOnly],
+            recentHosts: recent
+        )
+
+        #expect(favorites.map(\.id) == ["ssh:favorite"])
+        #expect(recent.map(\.id) == ["ssh:recent"])
+        #expect(saved.map(\.id) == ["ssh:saved"])
+        #expect(imported.map(\.id) == ["ssh:imported"])
     }
 
     @Test func duplicateAliasAvoidsCollisions() {

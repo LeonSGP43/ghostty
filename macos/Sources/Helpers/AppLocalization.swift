@@ -61,6 +61,9 @@ enum AppLocalization {
         "ai.manager.hosts.status.failed": "Failed",
         "ai.manager.hosts.empty": "No hosts configured yet.",
         "ai.manager.hosts.search": "Search SSH Hosts",
+        "ai.manager.hosts.favorite": "Favorite",
+        "ai.manager.hosts.unfavorite": "Unfavorite",
+        "ai.manager.hosts.favorites": "Favorites",
         "ai.manager.hosts.recent": "Recent",
         "ai.manager.hosts.saved": "Saved Hosts",
         "ai.manager.hosts.imported": "Imported from SSH Config",
@@ -180,6 +183,13 @@ enum AppLocalization {
         "ssh.connections.session.auth.authenticating": "Authenticating",
         "ssh.connections.session.auth.connected": "Connected",
         "ssh.connections.session.auth.failed": "Failed",
+<<<<<<< HEAD
+=======
+        "ssh.connections.new_tab_picker.subtitle": "Choose a local shell or a ready SSH connection.",
+        "ssh.connections.new_tab_picker.empty": "No saved SSH connections are ready yet.",
+        "ssh.connections.new_tab_picker.search": "Search local and SSH connections",
+        "ssh.connections.new_tab_picker.quick_connect": "⌘1-9 Quick Connect",
+>>>>>>> 11c8fb186 (feat(macos): add ssh workbench favorites and picker search)
         "about.tagline": "Fast, native, feature-rich terminal \nemulator pushing modern features.",
         "about.version": "Version",
         "about.build": "Build",
@@ -260,6 +270,9 @@ enum AppLocalization {
         "ai.manager.hosts.status.failed": "连接失败",
         "ai.manager.hosts.empty": "还没有配置任何主机。",
         "ai.manager.hosts.search": "搜索 SSH 主机",
+        "ai.manager.hosts.favorite": "收藏",
+        "ai.manager.hosts.unfavorite": "取消收藏",
+        "ai.manager.hosts.favorites": "收藏连接",
         "ai.manager.hosts.recent": "最近连接",
         "ai.manager.hosts.saved": "已保存连接",
         "ai.manager.hosts.imported": "从 SSH 配置导入",
@@ -379,6 +392,13 @@ enum AppLocalization {
         "ssh.connections.session.auth.authenticating": "认证中",
         "ssh.connections.session.auth.connected": "已连接",
         "ssh.connections.session.auth.failed": "失败",
+<<<<<<< HEAD
+=======
+        "ssh.connections.new_tab_picker.subtitle": "选择本地终端或一个已就绪的 SSH 连接。",
+        "ssh.connections.new_tab_picker.empty": "当前还没有可直接连接的已保存 SSH 连接。",
+        "ssh.connections.new_tab_picker.search": "搜索本地和 SSH 连接",
+        "ssh.connections.new_tab_picker.quick_connect": "⌘1-9 快速连接",
+>>>>>>> 11c8fb186 (feat(macos): add ssh workbench favorites and picker search)
         "about.tagline": "快速、原生、功能丰富的终端模拟器，持续推进现代终端体验。",
         "about.version": "版本",
         "about.build": "构建号",
@@ -995,6 +1015,13 @@ enum L10n {
         nonisolated static var authStateAuthenticating: String { AppLocalization.localizedString("ssh.connections.session.auth.authenticating") }
         nonisolated static var authStateConnected: String { AppLocalization.localizedString("ssh.connections.session.auth.connected") }
         nonisolated static var authStateFailed: String { AppLocalization.localizedString("ssh.connections.session.auth.failed") }
+<<<<<<< HEAD
+=======
+        nonisolated static var newTabPickerSubtitle: String { AppLocalization.localizedString("ssh.connections.new_tab_picker.subtitle") }
+        nonisolated static var newTabPickerEmpty: String { AppLocalization.localizedString("ssh.connections.new_tab_picker.empty") }
+        nonisolated static var newTabPickerSearch: String { AppLocalization.localizedString("ssh.connections.new_tab_picker.search") }
+        nonisolated static var newTabPickerQuickConnect: String { AppLocalization.localizedString("ssh.connections.new_tab_picker.quick_connect") }
+>>>>>>> 11c8fb186 (feat(macos): add ssh workbench favorites and picker search)
     }
 
     enum AITerminalManager {
@@ -1031,6 +1058,9 @@ enum L10n {
         nonisolated static var hostStatusFailed: String { AppLocalization.localizedString("ai.manager.hosts.status.failed") }
         nonisolated static var hostsEmpty: String { AppLocalization.localizedString("ai.manager.hosts.empty") }
         nonisolated static var searchHosts: String { AppLocalization.localizedString("ai.manager.hosts.search") }
+        nonisolated static var favoriteHost: String { AppLocalization.localizedString("ai.manager.hosts.favorite") }
+        nonisolated static var removeFavoriteHost: String { AppLocalization.localizedString("ai.manager.hosts.unfavorite") }
+        nonisolated static var favoriteHosts: String { AppLocalization.localizedString("ai.manager.hosts.favorites") }
         nonisolated static var recentHosts: String { AppLocalization.localizedString("ai.manager.hosts.recent") }
         nonisolated static var savedHosts: String { AppLocalization.localizedString("ai.manager.hosts.saved") }
         nonisolated static var importedHosts: String { AppLocalization.localizedString("ai.manager.hosts.imported") }
