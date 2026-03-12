@@ -496,6 +496,7 @@ enum AppLocalization {
         "About Ghostty": "关于 Ghostty",
         "Check for Updates...": "检查更新...",
         "Preferences…": "偏好设置…",
+        "Open Config": "打开配置文件",
         "AI Terminal Manager…": "AI 终端管理器…",
         "Connections…": "连接中心…",
         "Reload Configuration": "重新加载配置",
