@@ -126,6 +126,33 @@ struct AppLocalizationTests {
         )
     }
 
+    @Test func bellNotificationStringsAreLocalized() {
+        #expect(
+            AppLocalization.localizedString(
+                "terminal.notification.bell.title",
+                preferredLanguages: ["en-US"]
+            ) == "Terminal Bell"
+        )
+        #expect(
+            AppLocalization.localizedString(
+                "terminal.notification.bell.body",
+                preferredLanguages: ["en-US"]
+            ) == "A background tab requested attention."
+        )
+        #expect(
+            AppLocalization.localizedString(
+                "terminal.notification.bell.title",
+                preferredLanguages: ["zh-Hans"]
+            ) == "终端提醒"
+        )
+        #expect(
+            AppLocalization.localizedString(
+                "terminal.notification.bell.body",
+                preferredLanguages: ["zh-Hans"]
+            ) == "后台标签页请求你注意。"
+        )
+    }
+
     @Test func appLanguageSettingUsesStoredOverride() {
         let suiteName = "AppLocalizationTests.\(#function)"
         let userDefaults = UserDefaults(suiteName: suiteName)!

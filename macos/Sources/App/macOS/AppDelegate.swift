@@ -831,6 +831,12 @@ class AppDelegate: NSObject,
             // Bounce the dock icon if we're not focused.
             NSApp.requestUserAttention(.informationalRequest)
         }
+
+        guard ghostty.config.desktopNotifications else { return }
+        guard let surfaceView = notification.object as? Ghostty.SurfaceView else { return }
+        guard !surfaceView.focused else { return }
+
+        notifyForBell(on: surfaceView)
     }
 
     @objc private func terminalWindowHasBell(_ notification: Notification) {
@@ -872,6 +878,43 @@ class AppDelegate: NSObject,
 
             @unknown default:
                 // Handle future unknown states by doing nothing.
+                break
+            }
+        }
+    }
+
+    private func notifyForBell(on surfaceView: Ghostty.SurfaceView) {
+        let center = UNUserNotificationCenter.current()
+        let showNotification = {
+            DispatchQueue.main.async {
+                surfaceView.showUserNotification(
+                    title: AppLocalization.localizedString("terminal.notification.bell.title"),
+                    body: AppLocalization.localizedString("terminal.notification.bell.body"),
+                    requireFocus: false
+                )
+            }
+        }
+
+        center.getNotificationSettings { settings in
+            switch settings.authorizationStatus {
+            case .authorized:
+                showNotification()
+
+            case .notDetermined:
+                center.requestAuthorization(options: [.alert, .sound]) { granted, error in
+                    if let error {
+                        Self.logger.warning("Error requesting bell notification authorization: \(error)")
+                        return
+                    }
+
+                    guard granted else { return }
+                    showNotification()
+                }
+
+            case .denied, .provisional, .ephemeral:
+                break
+
+            @unknown default:
                 break
             }
         }
