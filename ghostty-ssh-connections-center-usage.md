@@ -1,74 +1,90 @@
 # Ghostty SSH Connections Center Usage
 
-## Open the Connections page
+## Open Connections
 
 - Menu: `Ghostty -> Connections…`
 - Command Palette: `Open: Connections`
-- 默认会作为当前 Ghostty 终端窗口中的一个原生 macOS tab 打开。
-- 如果当前没有任何 Ghostty 终端窗口，则会退回为单独窗口。
-- 如果当前终端窗口禁用了 tab，`Connections` 也会退回为单独窗口。
+- 已有 Ghostty 终端窗口时，`Connections` 会优先作为同一窗口内的原生 macOS tab 打开
+- 如果当前没有可用 Ghostty 窗口，或当前窗口禁用了 tabs，则会退回为单独窗口
 
-## Expected behavior
+## Save an SSH connection
 
-- 已经存在 Ghostty 终端窗口时，打开 `Connections` 后应直接在同一窗口的 tab 栏中出现 `Connections`。
-- 不应因为 `Connections` 窗口此前尚未加入任何 tab group，而被误判为“已经和当前终端在同一个 tab group”。
+1. 打开 `Connections`
+2. 点击 `New Connection`
+3. 填写：
+   - `Display Name`（可选）
+   - `SSH Alias` 或 `Hostname`
+   - `User`（可选）
+   - `Port`（可选）
+   - `Default Directory`（可选）
+4. 选择认证方式：
+   - `System SSH`
+   - `Saved Password`
+5. 如果是 `Saved Password`，输入密码并保存到 Keychain
+6. 点击 `Save Connection`
 
-## Save a new SSH connection
+## Manage saved hosts
 
-1. Open `Connections`.
-2. Click `New Connection`.
-3. Fill in:
-   - optional `Display Name`
-   - `SSH Alias` or `Hostname`
-   - optional `User`
-   - optional `Port`
-   - optional `Default Directory`
-4. Choose `Authentication`:
-   - `System SSH`: use your system ssh / ssh-agent flow.
-   - `Saved Password`: store the password in macOS Keychain and auto-fill it on the next connection.
-5. Click `Save Connection`.
+- 左侧分组为：
+  - `Favorites`
+  - `Recent`
+  - `Saved`
+  - `Imported`
+- 连接详情页支持：
+  - `Connect`
+  - `Edit`
+  - `Delete`
+  - `Duplicate`
+  - `Favorite / Unfavorite`
+- 双击侧边栏中的连接会直接发起连接
 
-## Updated interaction model
+## Imported hosts
 
-- 左侧现在拆成明确的三个层次：`最近连接`、`已保存连接`、`从 SSH 配置导入`。
-- `最近连接` 单独展示为快速连接区，不再和 `已保存连接` 混在同一列表里重复出现。
-- 右侧只展示当前连接的详情、主操作和该连接对应的活动会话。
-- `New Connection` / `Edit` / `Duplicate` 现在通过独立弹窗编辑，不再把大表单常驻在主界面里。
-- 如果 `Display Name` 留空，Ghostty 会优先使用 `SSH Alias`，否则回退为 `user@hostname` 作为连接名。
-- 在侧边栏中双击某个连接，会直接发起连接。
+- `Reload SSH Config` 会重新读取 `~/.ssh/config`
+- `Imported` 分组展示导入的 SSH host
+- 编辑 imported host 只会生成本地 override，不会回写 `~/.ssh/config`
+- `Reset Override` 会移除本地 override，恢复为导入值
 
-## Favorites and search
+## Open a new tab
 
-- 可以在连接详情页点击 `收藏 / 取消收藏`，把常用 SSH 放到侧边栏顶部。
-- `收藏连接` 分组会优先显示，且不会在 `最近连接`、`已保存连接`、`从 SSH 配置导入` 中重复出现。
-- `Cmd+N` 和 tab 栏 `+` 打开的 `New Tab` picker 现在支持搜索。
-- 搜索会匹配连接名称、SSH alias、hostname、user 与副标题。
-- picker 的顺序固定为：`本地` → `收藏连接` → `最近连接` → `已保存连接` → `从 SSH 配置导入`。
-- 键盘数字快捷键会按过滤后的最终结果重新分配。
-- 当搜索输入框已聚焦时，数字键会优先输入搜索；此时可以使用 `Cmd+1 ... Cmd+9` 直接连接对应条目。
+- 点击 tab 栏 `+`，或按 `Cmd+N`，会打开 Ghostty 内置的 `New Tab` 选择器
+- 选择器会展示：
+  - `Local`
+  - 可直接连接的 `Favorites`
+  - 可直接连接的 `Recent`
+  - 可直接连接的 `Saved`
+  - 可直接连接的 `Imported`
 
-## Connect quickly
+### Search
 
-- Click `Connect` on any saved/imported/recent host.
-- Ghostty opens a new tab or window depending on the `Launch` picker in the top-right corner.
-- If the connection uses `Saved Password`, Ghostty waits for the SSH password prompt and sends the saved password once.
+- 搜索会匹配：
+  - 连接名称
+  - `SSH Alias`
+  - `Hostname`
+  - `User`
+  - 副标题
 
-## Imported SSH config hosts
+### Shortcuts
 
-- `Reload SSH Config` reloads `~/.ssh/config`.
-- Imported hosts are shown in the `Imported` section.
-- Editing an imported host creates a local override only.
-- `Reset Override` removes the local override and returns the host to the imported values.
+- `↑ / ↓`：切换条目
+- `Enter`：打开当前条目
+- `Esc`：关闭选择器
+- `Cmd+1 ... Cmd+9`：直接连接对应条目
+- 当输入框聚焦时，裸数字继续输入搜索，不会触发连接
 
 ## Active remote sessions
 
-- The right-side panel shows current active remote sessions opened through Ghostty.
-- `Focus` jumps back to the corresponding terminal tab/window.
-- `Reconnect` opens another session using the same saved host profile.
+- 右侧详情区会显示当前活动中的远程会话
+- `Focus`：跳回对应 terminal tab/window
+- `Reconnect`：按原连接配置再开一个新 tab/window
 
-## Current V1 limits
+## Current limits
 
-- Uses system `ssh`.
-- Passwords are stored in macOS Keychain only, never in the JSON config.
-- Auto password submission only handles common SSH password prompts.
-- No SFTP, port forwarding, jump host UI, or known-host approval UI yet.
+- 仍然使用系统 `ssh`
+- 密码只保存在 macOS Keychain，不写入 JSON 配置
+- 自动密码提交只处理常见 SSH 密码提示
+- 当前仍不支持：
+  - SFTP
+  - 端口转发
+  - Jump Host / Proxy UI
+  - known-hosts 审批 UI
