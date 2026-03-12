@@ -131,25 +131,25 @@ struct AppLocalizationTests {
             AppLocalization.localizedString(
                 "terminal.notification.bell.title",
                 preferredLanguages: ["en-US"]
-            ) == "Terminal Bell"
+            ) == "Action Required"
         )
         #expect(
             AppLocalization.localizedString(
                 "terminal.notification.bell.body",
                 preferredLanguages: ["en-US"]
-            ) == "A background tab requested attention."
+            ) == "Task completed and waiting for your input."
         )
         #expect(
             AppLocalization.localizedString(
                 "terminal.notification.bell.title",
                 preferredLanguages: ["zh-Hans"]
-            ) == "终端提醒"
+            ) == "等待操作"
         )
         #expect(
             AppLocalization.localizedString(
                 "terminal.notification.bell.body",
                 preferredLanguages: ["zh-Hans"]
-            ) == "后台标签页请求你注意。"
+            ) == "任务已完成，等待你的操作。"
         )
     }
 
