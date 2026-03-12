@@ -1099,9 +1099,8 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
 
     // Shows the "+" button in the tab bar, responds to that click.
     override func newWindowForTab(_ sender: Any?) {
-        // Trigger the ghostty core event logic for a new tab.
-        guard let surface = self.focusedSurface?.surface else { return }
-        ghostty.newTab(surface: surface)
+        guard let appDelegate = NSApp.delegate as? AppDelegate else { return }
+        appDelegate.showNewTabPicker(from: window)
     }
 
     // MARK: NSWindowDelegate
@@ -1216,8 +1215,8 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
     }
 
     @IBAction func newTab(_ sender: Any?) {
-        guard let surface = focusedSurface?.surface else { return }
-        ghostty.newTab(surface: surface)
+        guard let appDelegate = NSApp.delegate as? AppDelegate else { return }
+        appDelegate.showNewTabPicker(from: window)
     }
 
     @IBAction func closeTab(_ sender: Any?) {
