@@ -37,6 +37,16 @@
 - 如果 `Display Name` 留空，Ghostty 会优先使用 `SSH Alias`，否则回退为 `user@hostname` 作为连接名。
 - 在侧边栏中双击某个连接，会直接发起连接。
 
+## Favorites and search
+
+- 可以在连接详情页点击 `收藏 / 取消收藏`，把常用 SSH 放到侧边栏顶部。
+- `收藏连接` 分组会优先显示，且不会在 `最近连接`、`已保存连接`、`从 SSH 配置导入` 中重复出现。
+- `Cmd+N` 和 tab 栏 `+` 打开的 `New Tab` picker 现在支持搜索。
+- 搜索会匹配连接名称、SSH alias、hostname、user 与副标题。
+- picker 的顺序固定为：`本地` → `收藏连接` → `最近连接` → `已保存连接` → `从 SSH 配置导入`。
+- 键盘数字快捷键会按过滤后的最终结果重新分配。
+- 当搜索输入框已聚焦时，数字键会优先输入搜索；此时可以使用 `Cmd+1 ... Cmd+9` 直接连接对应条目。
+
 ## Connect quickly
 
 - Click `Connect` on any saved/imported/recent host.
