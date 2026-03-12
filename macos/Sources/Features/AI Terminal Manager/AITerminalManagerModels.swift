@@ -505,6 +505,21 @@ struct ShannonProposedAction: Equatable, Sendable {
             true
         }
     }
+
+    var adoptsTargetSession: Bool {
+        switch kind {
+        case .sendCommand,
+             .sendInput,
+             .focusSession:
+            true
+        case .closeSession,
+             .createLocalTab,
+             .createRemoteTab,
+             .readTab,
+             .closeTab:
+            false
+        }
+    }
 }
 
 struct AITerminalManagerConfiguration: Codable, Sendable {

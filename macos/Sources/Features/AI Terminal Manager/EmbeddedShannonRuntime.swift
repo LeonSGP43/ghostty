@@ -10,6 +10,17 @@ struct ShannonRuntimeSessionContext: Sendable {
     var managedState: AITerminalManagedState
 }
 
+struct ShannonRuntimeAvailableSessionContext: Sendable {
+    let id: UUID
+    var title: String
+    var hostID: String?
+    var hostLabel: String
+    var workspaceID: String?
+    var workingDirectory: String?
+    var managedState: AITerminalManagedState
+    var isFocused: Bool
+}
+
 struct ShannonRuntimeHostContext: Sendable {
     var id: String
     var name: String
@@ -31,10 +42,28 @@ struct ShannonRuntimeRequest: Sendable {
     var session: ShannonRuntimeSessionContext
     var visibleText: String
     var screenText: String
+    var availableSessions: [ShannonRuntimeAvailableSessionContext]
     var availableHosts: [ShannonRuntimeHostContext]
     var availableWorkspaces: [ShannonRuntimeWorkspaceContext]
 
     var externalPromptText: String {
+        let sessionsText = availableSessions.isEmpty
+            ? "(none)"
+            : availableSessions.map { availableSession in
+                let focusMarker = availableSession.isFocused ? " focused" : ""
+                let currentMarker = availableSession.id == session.id ? " current" : ""
+                let workspaceText = availableSession.workspaceID ?? "none"
+                let workingDirectory = availableSession.workingDirectory ?? "unknown"
+                let hostID = availableSession.hostID ?? "unknown"
+                return """
+                - \(availableSession.title) [\(availableSession.id.uuidString)]\(currentMarker)\(focusMarker)
+                  host: \(availableSession.hostLabel) [\(hostID)]
+                  workspace: \(workspaceText)
+                  working directory: \(workingDirectory)
+                  managed state: \(availableSession.managedState.rawValue)
+                """
+            }.joined(separator: "\n")
+
         let hostsText = availableHosts.isEmpty
             ? "(none)"
             : availableHosts.map { host in
@@ -63,6 +92,9 @@ struct ShannonRuntimeRequest: Sendable {
         Session workspace ID: \(session.workspaceID ?? "none")
         Working directory: \(session.workingDirectory ?? "unknown")
         Managed state: \(session.managedState.rawValue)
+
+        Open Ghostty sessions:
+        \(sessionsText)
 
         Available hosts:
         \(hostsText)
@@ -406,16 +438,22 @@ actor EmbeddedShannonRuntime {
             ? .sendInput
             : .sendCommand
         let wantsRead = isReadTabRequest(userPrompt)
+        let createAction = proposedCreateTabAction(request)
+        let resolvedTargetSessionID = if createAction == nil {
+            resolveTargetSession(in: request)?.id ?? request.session.id
+        } else {
+            request.session.id
+        }
 
         var actions: [ShannonProposedAction] = []
 
-        if let createAction = proposedCreateTabAction(request) {
+        if let createAction {
             actions.append(createAction)
         }
 
         if let command, !command.isEmpty {
             actions.append(ShannonProposedAction(
-                targetSessionID: request.session.id,
+                targetSessionID: resolvedTargetSessionID,
                 kind: commandKind,
                 payload: command
             ))
@@ -423,7 +461,7 @@ actor EmbeddedShannonRuntime {
 
         if wantsRead {
             actions.append(ShannonProposedAction(
-                targetSessionID: request.session.id,
+                targetSessionID: resolvedTargetSessionID,
                 kind: .readTab,
                 payload: nil
             ))
@@ -431,7 +469,7 @@ actor EmbeddedShannonRuntime {
 
         if actions.isEmpty, isFocusRequest(userPrompt) {
             actions.append(ShannonProposedAction(
-                targetSessionID: request.session.id,
+                targetSessionID: resolvedTargetSessionID,
                 kind: .focusSession,
                 payload: nil
             ))
@@ -439,7 +477,7 @@ actor EmbeddedShannonRuntime {
 
         if actions.isEmpty, isCloseRequest(userPrompt) {
             actions.append(ShannonProposedAction(
-                targetSessionID: request.session.id,
+                targetSessionID: resolvedTargetSessionID,
                 kind: .closeTab,
                 payload: nil
             ))
@@ -521,6 +559,42 @@ actor EmbeddedShannonRuntime {
                     directoryOverride: currentDirectory
                 )
             }
+        }
+
+        return nil
+    }
+
+    private static func resolveTargetSession(
+        in request: ShannonRuntimeRequest
+    ) -> ShannonRuntimeAvailableSessionContext? {
+        let currentSessionID = request.session.id
+        let userPrompt = request.userPrompt
+
+        let matchingSessions = request.availableSessions.compactMap { availableSession -> (Int, ShannonRuntimeAvailableSessionContext)? in
+            let score = sessionMatchScore(
+                availableSession,
+                prompt: userPrompt,
+                currentSessionID: currentSessionID
+            )
+            guard score > 0 else { return nil }
+            return (score, availableSession)
+        }
+        .sorted { lhs, rhs in
+            if lhs.0 != rhs.0 {
+                return lhs.0 > rhs.0
+            }
+            if lhs.1.isFocused != rhs.1.isFocused {
+                return lhs.1.isFocused && !rhs.1.isFocused
+            }
+            return lhs.1.title.localizedCaseInsensitiveCompare(rhs.1.title) == .orderedAscending
+        }
+
+        if let matchedSession = matchingSessions.first?.1 {
+            return matchedSession
+        }
+
+        if mentionsCurrentSession(userPrompt) {
+            return request.availableSessions.first(where: { $0.id == currentSessionID })
         }
 
         return nil
@@ -688,6 +762,82 @@ actor EmbeddedShannonRuntime {
         }
     }
 
+    private static func mentionsCurrentSession(_ prompt: String) -> Bool {
+        let normalized = prompt.lowercased()
+        return normalized.contains("current tab")
+            || normalized.contains("this tab")
+            || normalized.contains("current session")
+            || normalized.contains("this session")
+            || prompt.contains("当前")
+            || prompt.contains("这个")
+    }
+
+    private static func sessionMatchScore(
+        _ session: ShannonRuntimeAvailableSessionContext,
+        prompt: String,
+        currentSessionID: UUID
+    ) -> Int {
+        let normalized = prompt.lowercased()
+
+        if session.id == currentSessionID {
+            return mentionsCurrentSession(prompt) ? 25 : 0
+        }
+
+        var bestScore = 0
+
+        for candidate in sessionMatchCandidates(for: session) {
+            let token = candidate.token.lowercased()
+            guard token.count >= candidate.minimumLength else { continue }
+            guard normalized.contains(token) else { continue }
+            bestScore = max(bestScore, candidate.score)
+        }
+
+        return bestScore
+    }
+
+    private static func sessionMatchCandidates(
+        for session: ShannonRuntimeAvailableSessionContext
+    ) -> [(token: String, score: Int, minimumLength: Int)] {
+        var candidates: [(String, Int, Int)] = [
+            (session.title, 120, 2),
+            (session.hostLabel, 100, 2),
+        ]
+
+        if let hostID = session.hostID, !hostID.isEmpty {
+            candidates.append((hostID, 90, 3))
+        }
+
+        if let workspaceID = session.workspaceID, !workspaceID.isEmpty {
+            candidates.append((workspaceID, 80, 3))
+        }
+
+        if let workingDirectory = session.workingDirectory, !workingDirectory.isEmpty {
+            candidates.append((workingDirectory, 70, 4))
+            let directoryName = URL(fileURLWithPath: workingDirectory).lastPathComponent
+            if !directoryName.isEmpty {
+                candidates.append((directoryName, 75, 2))
+            }
+        }
+
+        return candidates
+    }
+
+    private static func sessionTargetLabel(
+        for action: ShannonProposedAction,
+        request: ShannonRuntimeRequest
+    ) -> String? {
+        guard action.targetSessionID != request.session.id else { return nil }
+        guard let session = request.availableSessions.first(where: { $0.id == action.targetSessionID }) else {
+            return nil
+        }
+
+        if !session.title.isEmpty {
+            return session.title
+        }
+
+        return session.hostLabel
+    }
+
     private static func latestLine(from screenText: String, fallback visibleText: String) -> String {
         lastMeaningfulLine(in: screenText)
             ?? lastMeaningfulLine(in: visibleText)
@@ -725,18 +875,42 @@ actor EmbeddedShannonRuntime {
         request: ShannonRuntimeRequest,
         prefersChinese: Bool
     ) -> String {
+        let targetLabel = sessionTargetLabel(for: action, request: request)
+
         switch action.kind {
         case .sendCommand:
+            let commandDescription = prefersChinese
+                ? "发送命令 `\(action.payload ?? "")`"
+                : "send command `\(action.payload ?? "")`"
+            if let targetLabel {
+                return prefersChinese
+                    ? "向 tab \(targetLabel) \(commandDescription)"
+                    : "\(commandDescription) to tab \(targetLabel)"
+            }
             return prefersChinese
                 ? "发送命令 `\(action.payload ?? "")`"
                 : "send command `\(action.payload ?? "")`"
         case .sendInput:
+            let inputDescription = prefersChinese
+                ? "发送原始输入 `\(action.payload ?? "")`"
+                : "send raw input `\(action.payload ?? "")`"
+            if let targetLabel {
+                return prefersChinese
+                    ? "向 tab \(targetLabel) \(inputDescription)"
+                    : "\(inputDescription) to tab \(targetLabel)"
+            }
             return prefersChinese
                 ? "发送原始输入 `\(action.payload ?? "")`"
                 : "send raw input `\(action.payload ?? "")`"
         case .focusSession:
+            if let targetLabel {
+                return prefersChinese ? "聚焦 tab \(targetLabel)" : "focus tab \(targetLabel)"
+            }
             return prefersChinese ? "聚焦当前 tab" : "focus the current tab"
         case .closeSession:
+            if let targetLabel {
+                return prefersChinese ? "关闭 tab \(targetLabel)" : "close tab \(targetLabel)"
+            }
             return prefersChinese ? "关闭当前 tab" : "close the current tab"
         case .createLocalTab:
             if let workspace = request.availableWorkspaces.first(where: { $0.id == action.workspaceID }) {
@@ -764,8 +938,14 @@ actor EmbeddedShannonRuntime {
                 ? "创建连接到 \(hostName) 的远程 tab"
                 : "create a remote tab connected to \(hostName)"
         case .readTab:
+            if let targetLabel {
+                return prefersChinese ? "读取 tab \(targetLabel) 快照" : "read the snapshot for tab \(targetLabel)"
+            }
             return prefersChinese ? "读取当前 tab 快照" : "read the current tab snapshot"
         case .closeTab:
+            if let targetLabel {
+                return prefersChinese ? "关闭 tab \(targetLabel)" : "close tab \(targetLabel)"
+            }
             return prefersChinese ? "关闭当前 tab" : "close the current tab"
         }
     }

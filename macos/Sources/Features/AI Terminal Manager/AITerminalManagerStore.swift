@@ -793,6 +793,18 @@ final class AITerminalManagerStore: ObservableObject {
             ),
             visibleText: visibleText,
             screenText: screenText,
+            availableSessions: sessions.map { availableSession in
+                ShannonRuntimeAvailableSessionContext(
+                    id: availableSession.id,
+                    title: availableSession.title,
+                    hostID: availableSession.hostID,
+                    hostLabel: availableSession.hostLabel,
+                    workspaceID: availableSession.workspaceID,
+                    workingDirectory: availableSession.workingDirectory,
+                    managedState: availableSession.managedState,
+                    isFocused: availableSession.isFocused
+                )
+            },
             availableHosts: availableHosts.map { host in
                 ShannonRuntimeHostContext(
                     id: host.id,
@@ -841,6 +853,12 @@ final class AITerminalManagerStore: ObservableObject {
                     case .tool(let payload):
                         shannonLastToolEvent = "\(payload.tool) · \(payload.status)"
                     case .approvalNeeded(let approval):
+                        if let action = approval.action {
+                            currentManagedSessionID = adoptShannonTargetSessionIfNeeded(
+                                for: action,
+                                currentManagedSessionID: currentManagedSessionID
+                            )
+                        }
                         pendingShannonApproval = approval
                         shannonRunState = .waitingApproval
                         requireApproval(for: currentManagedSessionID)
@@ -860,6 +878,10 @@ final class AITerminalManagerStore: ObservableObject {
                             failTask(for: currentManagedSessionID)
                         }
                     case .actionRequested(let request):
+                        currentManagedSessionID = adoptShannonTargetSessionIfNeeded(
+                            for: request.action,
+                            currentManagedSessionID: currentManagedSessionID
+                        )
                         shannonLastToolEvent = request.summary
                         if let task = task(for: currentManagedSessionID) {
                             updateTask(task.id, state: .active, note: request.summary)
@@ -1292,6 +1314,34 @@ final class AITerminalManagerStore: ObservableObject {
         refreshSelectedSessionSnapshot()
     }
 
+    private func adoptShannonTargetSessionIfNeeded(
+        for action: ShannonProposedAction,
+        currentManagedSessionID: UUID
+    ) -> UUID {
+        var handoffState = ShannonSessionHandoffState(
+            taskBindings: taskBindings,
+            tasks: tasks,
+            registrations: registrations,
+            selectedSessionID: selectedSessionID
+        )
+        let nextManagedSessionID = Self.applyShannonTargetSessionAdoption(
+            for: action,
+            currentManagedSessionID: currentManagedSessionID,
+            sessions: sessions,
+            state: &handoffState
+        )
+        guard nextManagedSessionID != currentManagedSessionID else {
+            return currentManagedSessionID
+        }
+
+        taskBindings = handoffState.taskBindings
+        tasks = handoffState.tasks
+        registrations = handoffState.registrations
+        selectedSessionID = handoffState.selectedSessionID
+        refreshSelectedSessionSnapshot()
+        return nextManagedSessionID
+    }
+
     private func rebuildSessions() {
         let hostLookup = Dictionary(uniqueKeysWithValues: availableHosts.map { ($0.id, $0) })
         let activeSessionIDs = Set(
@@ -1592,6 +1642,28 @@ final class AITerminalManagerStore: ObservableObject {
         state.selectedSessionID = targetSessionID
     }
 
+    nonisolated static func applyShannonTargetSessionAdoption(
+        for action: ShannonProposedAction,
+        currentManagedSessionID: UUID,
+        sessions: [AITerminalSessionSummary],
+        state: inout ShannonSessionHandoffState
+    ) -> UUID {
+        guard action.adoptsTargetSession,
+              action.targetSessionID != currentManagedSessionID,
+              let targetSession = sessions.first(where: { $0.id == action.targetSessionID })
+        else {
+            return currentManagedSessionID
+        }
+
+        applyShannonSessionHandoff(
+            from: currentManagedSessionID,
+            to: action.targetSessionID,
+            targetSessionTitle: targetSession.title,
+            state: &state
+        )
+        return action.targetSessionID
+    }
+
     private func reconcileImportedState() {
         let nextConfiguration = Self.reconciledConfiguration(
             configuration,
@@ -1754,6 +1826,7 @@ final class AITerminalManagerStore: ObservableObject {
     nonisolated static func shannonPrompt(
         userPrompt: String,
         session: AITerminalSessionSummary,
+        availableSessions: [AITerminalSessionSummary] = [],
         visibleText: String,
         screenText: String
     ) -> String {
@@ -1770,6 +1843,18 @@ final class AITerminalManagerStore: ObservableObject {
             ),
             visibleText: visibleText,
             screenText: screenText,
+            availableSessions: availableSessions.map { availableSession in
+                ShannonRuntimeAvailableSessionContext(
+                    id: availableSession.id,
+                    title: availableSession.title,
+                    hostID: availableSession.hostID,
+                    hostLabel: availableSession.hostLabel,
+                    workspaceID: availableSession.workspaceID,
+                    workingDirectory: availableSession.workingDirectory,
+                    managedState: availableSession.managedState,
+                    isFocused: availableSession.isFocused
+                )
+            },
             availableHosts: [],
             availableWorkspaces: []
         ).externalPromptText
