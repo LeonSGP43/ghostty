@@ -826,13 +826,26 @@ class BaseTerminalController: NSWindowController,
         }
     }
 
-    private func computeTitle(title: String, bell: Bool) -> String {
-        var result = title
-        if bell && ghostty.config.bellFeatures.contains(.title) {
-            result = "🔔 \(result)"
-        }
+    static func decorateTitle(
+        title: String,
+        bell: Bool,
+        showsBellInTitle: Bool,
+        suppressBellDecoration: Bool
+    ) -> String {
+        _ = bell
+        _ = showsBellInTitle
+        _ = suppressBellDecoration
+        return title
+    }
 
-        return result
+    private func computeTitle(title: String, bell: Bool) -> String {
+        _ = bell
+        return Self.decorateTitle(
+            title: title,
+            bell: bell,
+            showsBellInTitle: ghostty.config.bellFeatures.contains(.title),
+            suppressBellDecoration: false
+        )
     }
 
     private func titleDidChange(to: String) {
@@ -1213,6 +1226,7 @@ class BaseTerminalController: NSWindowController,
         // without separately tracking NSWindow lifecycle events.
         if bell {
             bell = false
+            (window as? TerminalWindow)?.tabBellVisible = false
             NotificationCenter.default.post(
                 name: .terminalWindowBellDidChangeNotification,
                 object: self,
@@ -1506,6 +1520,7 @@ extension BaseTerminalController {
             .sink { [weak self] hasBell in
                 guard let self else { return }
                 bell = hasBell
+                (window as? TerminalWindow)?.tabBellVisible = hasBell
                 NotificationCenter.default.post(
                     name: .terminalWindowBellDidChangeNotification,
                     object: self,
