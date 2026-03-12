@@ -58,6 +58,20 @@ struct ShannonActionRequest: Equatable, Identifiable, Sendable {
 struct ShannonActionExecutionResult: Equatable, Sendable {
     var success: Bool
     var output: String
+    var sessionID: UUID?
+    var sessionTitle: String?
+
+    init(
+        success: Bool,
+        output: String,
+        sessionID: UUID? = nil,
+        sessionTitle: String? = nil
+    ) {
+        self.success = success
+        self.output = output
+        self.sessionID = sessionID
+        self.sessionTitle = sessionTitle
+    }
 }
 
 enum ShannonBridgeEvent: Equatable, Sendable {

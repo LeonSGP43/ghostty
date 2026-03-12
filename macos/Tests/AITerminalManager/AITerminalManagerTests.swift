@@ -261,6 +261,7 @@ struct AITerminalManagerTests {
     @Test func embeddedRuntimeRequestsApprovalBeforeRemoteTabCreation() async throws {
         let runtime = EmbeddedShannonRuntime()
         let sessionID = UUID()
+        let createdSessionID = UUID()
         let request = ShannonRuntimeRequest(
             userPrompt: "开一个到 buildbox 的新 tab",
             session: ShannonRuntimeSessionContext(
@@ -312,7 +313,9 @@ struct AITerminalManagerTests {
                     id: actionRequest.id,
                     result: ShannonActionExecutionResult(
                         success: true,
-                        output: "create_remote_tab · buildbox · buildbox"
+                        output: "create_remote_tab · buildbox · buildbox",
+                        sessionID: createdSessionID,
+                        sessionTitle: "buildbox"
                     )
                 )
             case .done(let result):
@@ -325,6 +328,55 @@ struct AITerminalManagerTests {
         #expect(approvalAction?.kind == .createRemoteTab)
         #expect(sawExecution)
         #expect(finalReply?.contains("buildbox") == true)
+        #expect(finalReply?.contains("托管") == true)
+    }
+
+    @Test func shannonSessionHandoffMovesTaskBindingToNewTab() {
+        let sourceSessionID = UUID()
+        let targetSessionID = UUID()
+        let taskID = UUID()
+
+        var state = ShannonSessionHandoffState(
+            taskBindings: [sourceSessionID: taskID],
+            tasks: [
+            AITerminalTaskRecord(
+                id: taskID,
+                title: "Manage Source",
+                sessionID: sourceSessionID,
+                state: .active
+            ),
+            ],
+            registrations: [
+                sourceSessionID: AITerminalLaunchRegistration(
+                    hostID: AITerminalHost.local.id,
+                    workspaceID: nil,
+                    managedState: .managedActive,
+                    sourceLabel: "This Mac"
+                ),
+                targetSessionID: AITerminalLaunchRegistration(
+                    hostID: "ssh:buildbox",
+                    workspaceID: nil,
+                    managedState: .manual,
+                    sourceLabel: "buildbox"
+                ),
+            ],
+            selectedSessionID: sourceSessionID
+        )
+
+        AITerminalManagerStore.applyShannonSessionHandoff(
+            from: sourceSessionID,
+            to: targetSessionID,
+            targetSessionTitle: "buildbox",
+            state: &state
+        )
+
+        #expect(state.taskBindings[sourceSessionID] == nil)
+        #expect(state.taskBindings[targetSessionID] == taskID)
+        #expect(state.tasks.first?.sessionID == targetSessionID)
+        #expect(state.tasks.first?.title == L10n.AITerminalManager.manageSession("buildbox"))
+        #expect(state.registrations[sourceSessionID]?.managedState == .manual)
+        #expect(state.registrations[targetSessionID]?.managedState == .managedActive)
+        #expect(state.selectedSessionID == targetSessionID)
     }
 
     @Test @MainActor func storeSavesConfiguredHost() throws {

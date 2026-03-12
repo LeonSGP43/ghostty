@@ -228,7 +228,7 @@ actor EmbeddedShannonRuntime {
             ShannonBridgeRunResult(
                 reply: Self.completionReply(
                     for: action,
-                    output: actionResult.output,
+                    result: actionResult,
                     prefersChinese: plan.prefersChinese
                 ),
                 sessionID: request.session.id.uuidString,
@@ -704,17 +704,29 @@ actor EmbeddedShannonRuntime {
 
     private static func completionReply(
         for action: ShannonProposedAction,
-        output: String,
+        result: ShannonActionExecutionResult,
         prefersChinese: Bool
     ) -> String {
         switch action.kind {
         case .readTab:
-            return output
-        case .sendCommand, .sendInput, .focusSession, .closeSession, .createLocalTab, .createRemoteTab, .closeTab:
-            if prefersChinese {
-                return "Ghostty 已执行该动作：\(output)"
+            return result.output
+        case .createLocalTab, .createRemoteTab:
+            if let sessionTitle = result.sessionTitle, !sessionTitle.isEmpty {
+                if prefersChinese {
+                    return "Ghostty 已创建并切换到新的托管 tab：\(sessionTitle)。\(result.output)"
+                }
+                return "Ghostty created a new managed tab and switched control to \(sessionTitle). \(result.output)"
             }
-            return "Ghostty executed the requested action: \(output)"
+
+            if prefersChinese {
+                return "Ghostty 已执行该动作：\(result.output)"
+            }
+            return "Ghostty executed the requested action: \(result.output)"
+        case .sendCommand, .sendInput, .focusSession, .closeSession, .closeTab:
+            if prefersChinese {
+                return "Ghostty 已执行该动作：\(result.output)"
+            }
+            return "Ghostty executed the requested action: \(result.output)"
         }
     }
 }
