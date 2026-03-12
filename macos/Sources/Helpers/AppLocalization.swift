@@ -33,9 +33,31 @@ enum AppLocalization {
         "ai.manager.subtitle": "Ghostty hosts the terminals; Shannon is prepared as the local orchestration supervisor.",
         "ai.manager.launch": "Launch",
         "ai.manager.supervisor": "Supervisor",
-        "ai.manager.supervisor.hint": "This is the Phase 1 control-plane scaffold. Set `GHOSTTY_SHANNON_PATH` or save a future config to make the embedded Shannon runtime launchable.",
+        "ai.manager.supervisor.hint": "Ghostty now treats Shannon as an embedded local brain by default. An external runtime bridge remains optional when `GHOSTTY_SHANNON_PATH` is set.",
         "ai.manager.supervisor.start": "Start Supervisor",
         "ai.manager.supervisor.stop": "Stop Supervisor",
+        "ai.manager.runtime.endpoint": "Runtime Endpoint",
+        "ai.manager.runtime.health": "Runtime Health",
+        "ai.manager.runtime.version": "Runtime Version",
+        "ai.manager.runtime.gateway": "Gateway Connection",
+        "ai.manager.runtime.active_agent": "Active Agent",
+        "ai.manager.runtime.uptime": "Uptime",
+        "ai.manager.shannon.prompt": "Shannon Prompt",
+        "ai.manager.shannon.prompt.empty": "Shannon prompt cannot be empty.",
+        "ai.manager.shannon.ask": "Ask Shannon",
+        "ai.manager.shannon.response": "Shannon Response",
+        "ai.manager.shannon.response.empty": "No Shannon response yet.",
+        "ai.manager.shannon.status.idle": "Idle",
+        "ai.manager.shannon.status.running": "Running",
+        "ai.manager.shannon.status.waiting_approval": "Waiting for approval",
+        "ai.manager.shannon.status.completed": "Completed",
+        "ai.manager.shannon.status.failed": "Failed: %@",
+        "ai.manager.shannon.runtime_unavailable": "Shannon runtime is unavailable.",
+        "ai.manager.shannon.request_submitted": "Submitted to Shannon runtime.",
+        "ai.manager.shannon.approval_needed": "Shannon requested approval for %@.",
+        "ai.manager.shannon.approval_card": "Approval Required",
+        "ai.manager.shannon.approve": "Approve",
+        "ai.manager.shannon.deny": "Deny",
         "ai.manager.hosts": "Hosts",
         "ai.manager.hosts.open_local_shell": "Open Local Shell",
         "ai.manager.hosts.reload_ssh_config": "Reload SSH Config",
@@ -147,9 +169,16 @@ enum AppLocalization {
         "ai.manager.supervisor.unavailable": "Unavailable",
         "ai.manager.supervisor.stopped": "Stopped",
         "ai.manager.supervisor.starting": "Starting",
+        "ai.manager.supervisor.running_embedded": "Running (embedded)",
         "ai.manager.supervisor.running": "Running (pid %@)",
         "ai.manager.supervisor.failed": "Failed: %@",
         "ai.manager.supervisor.exit_status": "Exited with status %@",
+        "ai.manager.runtime.unavailable": "Unavailable",
+        "ai.manager.runtime.probing": "Probing runtime...",
+        "ai.manager.runtime.healthy": "Healthy",
+        "ai.manager.runtime.unreachable": "Unreachable: %@",
+        "ai.manager.runtime.gateway.connected": "Connected",
+        "ai.manager.runtime.gateway.disconnected": "Disconnected",
         "ai.manager.session.manual_session": "Manual Session",
         "ai.manager.task.waiting_for_operator": "Waiting for operator approval.",
         "ai.manager.task.marked_complete": "Marked complete by operator.",
@@ -183,13 +212,12 @@ enum AppLocalization {
         "ssh.connections.session.auth.authenticating": "Authenticating",
         "ssh.connections.session.auth.connected": "Connected",
         "ssh.connections.session.auth.failed": "Failed",
-<<<<<<< HEAD
-=======
         "ssh.connections.new_tab_picker.subtitle": "Choose a local shell or a ready SSH connection.",
         "ssh.connections.new_tab_picker.empty": "No saved SSH connections are ready yet.",
         "ssh.connections.new_tab_picker.search": "Search local and SSH connections",
         "ssh.connections.new_tab_picker.quick_connect": "⌘1-9 Quick Connect",
->>>>>>> 11c8fb186 (feat(macos): add ssh workbench favorites and picker search)
+        "terminal.notification.bell.title": "Terminal Bell",
+        "terminal.notification.bell.body": "A background tab requested attention.",
         "about.tagline": "Fast, native, feature-rich terminal \nemulator pushing modern features.",
         "about.version": "Version",
         "about.build": "Build",
@@ -242,9 +270,31 @@ enum AppLocalization {
         "ai.manager.subtitle": "Ghostty 负责终端宿主；Shannon 作为本地主控编排器预留接入。",
         "ai.manager.launch": "启动方式",
         "ai.manager.supervisor": "主控进程",
-        "ai.manager.supervisor.hint": "这是 Phase 1 控制平面原型。设置 `GHOSTTY_SHANNON_PATH` 或保存后续配置后，即可让内嵌 Shannon 运行时可启动。",
+        "ai.manager.supervisor.hint": "Ghostty 现在默认把 Shannon 作为内嵌本地主脑运行。只有在设置 `GHOSTTY_SHANNON_PATH` 时，才会启用可选的外部 runtime bridge。",
         "ai.manager.supervisor.start": "启动主控进程",
         "ai.manager.supervisor.stop": "停止主控进程",
+        "ai.manager.runtime.endpoint": "运行时地址",
+        "ai.manager.runtime.health": "运行时健康状态",
+        "ai.manager.runtime.version": "运行时版本",
+        "ai.manager.runtime.gateway": "网关连接",
+        "ai.manager.runtime.active_agent": "当前 Agent",
+        "ai.manager.runtime.uptime": "运行时长",
+        "ai.manager.shannon.prompt": "Shannon 请求",
+        "ai.manager.shannon.prompt.empty": "Shannon 请求不能为空。",
+        "ai.manager.shannon.ask": "请求 Shannon",
+        "ai.manager.shannon.response": "Shannon 回复",
+        "ai.manager.shannon.response.empty": "还没有 Shannon 回复。",
+        "ai.manager.shannon.status.idle": "空闲",
+        "ai.manager.shannon.status.running": "运行中",
+        "ai.manager.shannon.status.waiting_approval": "等待审批",
+        "ai.manager.shannon.status.completed": "已完成",
+        "ai.manager.shannon.status.failed": "失败：%@",
+        "ai.manager.shannon.runtime_unavailable": "Shannon 运行时不可用。",
+        "ai.manager.shannon.request_submitted": "已提交到 Shannon 运行时。",
+        "ai.manager.shannon.approval_needed": "Shannon 请求对 %@ 进行审批。",
+        "ai.manager.shannon.approval_card": "待审批动作",
+        "ai.manager.shannon.approve": "批准",
+        "ai.manager.shannon.deny": "拒绝",
         "ai.manager.hosts": "主机",
         "ai.manager.hosts.open_local_shell": "打开本地 Shell",
         "ai.manager.hosts.reload_ssh_config": "重新加载 SSH 配置",
@@ -356,9 +406,16 @@ enum AppLocalization {
         "ai.manager.supervisor.unavailable": "不可用",
         "ai.manager.supervisor.stopped": "已停止",
         "ai.manager.supervisor.starting": "启动中",
+        "ai.manager.supervisor.running_embedded": "运行中（内嵌）",
         "ai.manager.supervisor.running": "运行中（pid %@）",
         "ai.manager.supervisor.failed": "失败：%@",
         "ai.manager.supervisor.exit_status": "进程退出，状态码 %@",
+        "ai.manager.runtime.unavailable": "不可用",
+        "ai.manager.runtime.probing": "正在探测运行时……",
+        "ai.manager.runtime.healthy": "健康",
+        "ai.manager.runtime.unreachable": "无法访问：%@",
+        "ai.manager.runtime.gateway.connected": "已连接",
+        "ai.manager.runtime.gateway.disconnected": "未连接",
         "ai.manager.session.manual_session": "手动会话",
         "ai.manager.task.waiting_for_operator": "等待操作员审批。",
         "ai.manager.task.marked_complete": "操作员已标记完成。",
@@ -392,13 +449,12 @@ enum AppLocalization {
         "ssh.connections.session.auth.authenticating": "认证中",
         "ssh.connections.session.auth.connected": "已连接",
         "ssh.connections.session.auth.failed": "失败",
-<<<<<<< HEAD
-=======
         "ssh.connections.new_tab_picker.subtitle": "选择本地终端或一个已就绪的 SSH 连接。",
         "ssh.connections.new_tab_picker.empty": "当前还没有可直接连接的已保存 SSH 连接。",
         "ssh.connections.new_tab_picker.search": "搜索本地和 SSH 连接",
         "ssh.connections.new_tab_picker.quick_connect": "⌘1-9 快速连接",
->>>>>>> 11c8fb186 (feat(macos): add ssh workbench favorites and picker search)
+        "terminal.notification.bell.title": "终端提醒",
+        "terminal.notification.bell.body": "后台标签页请求你注意。",
         "about.tagline": "快速、原生、功能丰富的终端模拟器，持续推进现代终端体验。",
         "about.version": "版本",
         "about.build": "构建号",
@@ -910,6 +966,7 @@ enum AppLocalization {
 
 enum L10n {
     enum Common {
+        nonisolated static var cancel: String { AppLocalization.localizedText("Cancel") }
         nonisolated static var untitled: String { AppLocalization.localizedString("common.untitled") }
     }
 
@@ -1015,13 +1072,10 @@ enum L10n {
         nonisolated static var authStateAuthenticating: String { AppLocalization.localizedString("ssh.connections.session.auth.authenticating") }
         nonisolated static var authStateConnected: String { AppLocalization.localizedString("ssh.connections.session.auth.connected") }
         nonisolated static var authStateFailed: String { AppLocalization.localizedString("ssh.connections.session.auth.failed") }
-<<<<<<< HEAD
-=======
         nonisolated static var newTabPickerSubtitle: String { AppLocalization.localizedString("ssh.connections.new_tab_picker.subtitle") }
         nonisolated static var newTabPickerEmpty: String { AppLocalization.localizedString("ssh.connections.new_tab_picker.empty") }
         nonisolated static var newTabPickerSearch: String { AppLocalization.localizedString("ssh.connections.new_tab_picker.search") }
         nonisolated static var newTabPickerQuickConnect: String { AppLocalization.localizedString("ssh.connections.new_tab_picker.quick_connect") }
->>>>>>> 11c8fb186 (feat(macos): add ssh workbench favorites and picker search)
     }
 
     enum AITerminalManager {
@@ -1033,6 +1087,28 @@ enum L10n {
         nonisolated static var supervisorHint: String { AppLocalization.localizedString("ai.manager.supervisor.hint") }
         nonisolated static var startSupervisor: String { AppLocalization.localizedString("ai.manager.supervisor.start") }
         nonisolated static var stopSupervisor: String { AppLocalization.localizedString("ai.manager.supervisor.stop") }
+        nonisolated static var runtimeEndpoint: String { AppLocalization.localizedString("ai.manager.runtime.endpoint") }
+        nonisolated static var runtimeHealth: String { AppLocalization.localizedString("ai.manager.runtime.health") }
+        nonisolated static var runtimeVersion: String { AppLocalization.localizedString("ai.manager.runtime.version") }
+        nonisolated static var runtimeGateway: String { AppLocalization.localizedString("ai.manager.runtime.gateway") }
+        nonisolated static var runtimeActiveAgent: String { AppLocalization.localizedString("ai.manager.runtime.active_agent") }
+        nonisolated static var runtimeUptime: String { AppLocalization.localizedString("ai.manager.runtime.uptime") }
+        nonisolated static var shannonPrompt: String { AppLocalization.localizedString("ai.manager.shannon.prompt") }
+        nonisolated static var shannonPromptEmpty: String { AppLocalization.localizedString("ai.manager.shannon.prompt.empty") }
+        nonisolated static var askShannon: String { AppLocalization.localizedString("ai.manager.shannon.ask") }
+        nonisolated static var shannonResponse: String { AppLocalization.localizedString("ai.manager.shannon.response") }
+        nonisolated static var shannonResponseEmpty: String { AppLocalization.localizedString("ai.manager.shannon.response.empty") }
+        nonisolated static var shannonIdle: String { AppLocalization.localizedString("ai.manager.shannon.status.idle") }
+        nonisolated static var shannonRunning: String { AppLocalization.localizedString("ai.manager.shannon.status.running") }
+        nonisolated static var shannonWaitingApproval: String { AppLocalization.localizedString("ai.manager.shannon.status.waiting_approval") }
+        nonisolated static var shannonCompleted: String { AppLocalization.localizedString("ai.manager.shannon.status.completed") }
+        nonisolated static func shannonFailed(_ message: String) -> String { AppLocalization.localizedString("ai.manager.shannon.status.failed", message) }
+        nonisolated static var shannonRuntimeUnavailable: String { AppLocalization.localizedString("ai.manager.shannon.runtime_unavailable") }
+        nonisolated static var shannonRequestSubmitted: String { AppLocalization.localizedString("ai.manager.shannon.request_submitted") }
+        nonisolated static func shannonApprovalNeeded(_ tool: String) -> String { AppLocalization.localizedString("ai.manager.shannon.approval_needed", tool) }
+        nonisolated static var shannonApprovalCard: String { AppLocalization.localizedString("ai.manager.shannon.approval_card") }
+        nonisolated static var approveAction: String { AppLocalization.localizedString("ai.manager.shannon.approve") }
+        nonisolated static var denyAction: String { AppLocalization.localizedString("ai.manager.shannon.deny") }
         nonisolated static var hosts: String { AppLocalization.localizedString("ai.manager.hosts") }
         nonisolated static var openLocalShell: String { AppLocalization.localizedString("ai.manager.hosts.open_local_shell") }
         nonisolated static var reloadSSHConfig: String { AppLocalization.localizedString("ai.manager.hosts.reload_ssh_config") }
@@ -1144,9 +1220,16 @@ enum L10n {
         nonisolated static var supervisorUnavailable: String { AppLocalization.localizedString("ai.manager.supervisor.unavailable") }
         nonisolated static var supervisorStopped: String { AppLocalization.localizedString("ai.manager.supervisor.stopped") }
         nonisolated static var supervisorStarting: String { AppLocalization.localizedString("ai.manager.supervisor.starting") }
+        nonisolated static var supervisorRunningEmbedded: String { AppLocalization.localizedString("ai.manager.supervisor.running_embedded") }
         nonisolated static func supervisorRunning(pid: Int32) -> String { AppLocalization.localizedString("ai.manager.supervisor.running", String(pid)) }
         nonisolated static func supervisorFailed(_ message: String) -> String { AppLocalization.localizedString("ai.manager.supervisor.failed", message) }
         nonisolated static func supervisorExitStatus(_ status: Int32) -> String { AppLocalization.localizedString("ai.manager.supervisor.exit_status", String(status)) }
+        nonisolated static var runtimeUnavailable: String { AppLocalization.localizedString("ai.manager.runtime.unavailable") }
+        nonisolated static var runtimeProbing: String { AppLocalization.localizedString("ai.manager.runtime.probing") }
+        nonisolated static var runtimeHealthy: String { AppLocalization.localizedString("ai.manager.runtime.healthy") }
+        nonisolated static func runtimeUnreachable(_ message: String) -> String { AppLocalization.localizedString("ai.manager.runtime.unreachable", message) }
+        nonisolated static var runtimeGatewayConnected: String { AppLocalization.localizedString("ai.manager.runtime.gateway.connected") }
+        nonisolated static var runtimeGatewayDisconnected: String { AppLocalization.localizedString("ai.manager.runtime.gateway.disconnected") }
         nonisolated static var manualSession: String { AppLocalization.localizedString("ai.manager.session.manual_session") }
         nonisolated static var waitingForOperator: String { AppLocalization.localizedString("ai.manager.task.waiting_for_operator") }
         nonisolated static var markedComplete: String { AppLocalization.localizedString("ai.manager.task.marked_complete") }
