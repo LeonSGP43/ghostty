@@ -8,6 +8,7 @@ struct NewTabPickerView: View {
 
     @State private var searchText = ""
     @State private var selectedID: String?
+    @FocusState private var searchFieldFocused: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -18,6 +19,12 @@ struct NewTabPickerView: View {
 
             TextField(L10n.SSHConnections.newTabPickerSearch, text: $searchText)
                 .textFieldStyle(.roundedBorder)
+                .focused($searchFieldFocused)
+                .backport.onKeyPress(.tab) { modifiers in
+                    guard !entries.isEmpty else { return .handled }
+                    moveSelection(modifiers.contains(.shift) ? -1 : 1)
+                    return .handled
+                }
                 .padding(.horizontal, 20)
                 .padding(.top, 16)
                 .padding(.bottom, 4)
@@ -59,6 +66,9 @@ struct NewTabPickerView: View {
         .overlay(shortcutLayer)
         .onAppear {
             selectedID = entries.first?.id
+            DispatchQueue.main.async {
+                searchFieldFocused = true
+            }
         }
         .onChange(of: entries.map(\.id)) { ids in
             guard let first = ids.first else {
@@ -173,6 +183,7 @@ struct NewTabPickerView: View {
             )
         }
         .buttonStyle(.plain)
+        .focusable(false)
     }
 
     private func shortcutBadge(_ shortcutIndex: Int?) -> some View {
