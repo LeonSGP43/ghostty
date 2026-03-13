@@ -100,6 +100,28 @@ struct AITerminalManagerTests {
         #expect(command == "ssh buildbox -t 'export TERM=xterm-256color && export COLORTERM=truecolor && unset LC_ALL && exec ${SHELL:-/bin/sh} -l'")
     }
 
+    @Test func buildsLocalMCDPlanWithSequentialCommands() throws {
+        let host = AITerminalHost(
+            id: "localmcd:grokmcp",
+            name: "grokmcp",
+            transport: .localmcd,
+            startupCommands: [
+                "cd /tmp/grokmcp",
+                "c codex",
+            ],
+            sshAlias: nil,
+            hostname: nil,
+            user: nil,
+            port: nil,
+            defaultDirectory: nil,
+            source: .configurationFile
+        )
+
+        let plan = try #require(AITerminalLaunchPlan.localCommand(host: host))
+        #expect(plan.surfaceConfiguration.initialInput == "cd /tmp/grokmcp\nc codex\n")
+        #expect(plan.registration.hostID == "localmcd:grokmcp")
+    }
+
     @Test func mergesImportedHostOverrides() {
         let imported = [
             AITerminalHost(
@@ -174,6 +196,32 @@ struct AITerminalManagerTests {
         #expect(store.configuration.savedHosts.first?.port == 2222)
         #expect(store.configuration.savedHosts.first?.id == "ssh:buildbox")
         #expect(store.configuration.savedHosts.first?.authMode == .system)
+    }
+
+    @Test @MainActor func storeSavesLocalMCDHost() {
+        let tempURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathExtension("json")
+
+        let store = AITerminalManagerStore(
+            appDelegateProvider: { nil },
+            configurationURL: tempURL
+        )
+
+        store.saveLocalMCDHost(
+            name: "grokmcp",
+            defaultDirectory: "/tmp/grokmcp",
+            startupCommands: """
+            cd /tmp/grokmcp
+            c codex
+            """
+        )
+
+        #expect(store.lastError == nil)
+        #expect(store.configuration.savedHosts.count == 1)
+        #expect(store.configuration.savedHosts.first?.transport == .localmcd)
+        #expect(store.configuration.savedHosts.first?.defaultDirectory == "/tmp/grokmcp")
+        #expect(store.configuration.savedHosts.first?.startupCommands == ["cd /tmp/grokmcp", "c codex"])
     }
 
     @Test func derivesHostNameFromAliasOrHostname() {
@@ -329,6 +377,54 @@ struct AITerminalManagerTests {
             favoriteHosts: [],
             recentHosts: [],
             savedHosts: [missingPasswordHost],
+            importedHosts: []
+        ) { _ in false }
+
+        #expect(entries.map(\.id) == ["local"])
+    }
+
+    @Test func newTabPickerEntriesIncludeLocalMCDHost() {
+        let localMCDHost = AITerminalHost(
+            id: "localmcd:grokmcp",
+            name: "grokmcp",
+            transport: .localmcd,
+            startupCommands: ["cd /tmp/grokmcp", "c codex"],
+            sshAlias: nil,
+            hostname: nil,
+            user: nil,
+            port: nil,
+            defaultDirectory: nil,
+            source: .configurationFile
+        )
+
+        let entries = NewTabPickerModel.entries(
+            favoriteHosts: [],
+            recentHosts: [],
+            savedHosts: [localMCDHost],
+            importedHosts: []
+        ) { _ in false }
+
+        #expect(entries.map(\.id) == ["local", "localmcd:grokmcp"])
+    }
+
+    @Test func newTabPickerEntriesExcludeLocalMCDHostWithoutStartupCommands() {
+        let localMCDHost = AITerminalHost(
+            id: "localmcd:grokmcp",
+            name: "grokmcp",
+            transport: .localmcd,
+            startupCommands: [],
+            sshAlias: nil,
+            hostname: nil,
+            user: nil,
+            port: nil,
+            defaultDirectory: nil,
+            source: .configurationFile
+        )
+
+        let entries = NewTabPickerModel.entries(
+            favoriteHosts: [],
+            recentHosts: [],
+            savedHosts: [localMCDHost],
             importedHosts: []
         ) { _ in false }
 

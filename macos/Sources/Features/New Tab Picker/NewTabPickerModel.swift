@@ -21,19 +21,22 @@ enum NewTabPickerModel {
         host: AITerminalHost,
         hasStoredPassword: Bool
     ) -> Bool {
-        if host.isLocal {
+        switch host.transport {
+        case .local:
+            return true
+        case .localmcd:
+            return AITerminalLaunchPlan.localCommand(host: host) != nil
+        case .ssh:
+            guard AITerminalLaunchPlan.remote(host: host, directoryOverride: nil) != nil else {
+                return false
+            }
+
+            if host.authMode == .password {
+                return hasStoredPassword
+            }
+
             return true
         }
-
-        guard AITerminalLaunchPlan.remote(host: host, directoryOverride: nil) != nil else {
-            return false
-        }
-
-        if host.authMode == .password {
-            return hasStoredPassword
-        }
-
-        return true
     }
 
     static func entries(
@@ -86,5 +89,6 @@ enum NewTabPickerModel {
             || (host.sshAlias?.localizedCaseInsensitiveContains(query) ?? false)
             || (host.hostname?.localizedCaseInsensitiveContains(query) ?? false)
             || (host.user?.localizedCaseInsensitiveContains(query) ?? false)
+            || host.startupCommands.contains(where: { $0.localizedCaseInsensitiveContains(query) })
     }
 }

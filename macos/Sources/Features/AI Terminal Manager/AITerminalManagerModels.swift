@@ -54,6 +54,7 @@ enum AITerminalHostSource: String, Codable, Sendable {
 
 enum AITerminalTransport: String, Codable, Sendable {
     case local
+    case localmcd
     case ssh
 }
 
@@ -75,6 +76,7 @@ struct AITerminalHost: Identifiable, Codable, Hashable, Sendable {
     let id: String
     var name: String
     var transport: AITerminalTransport
+    var startupCommands: [String]
     var sshAlias: String?
     var hostname: String?
     var user: String?
@@ -87,6 +89,7 @@ struct AITerminalHost: Identifiable, Codable, Hashable, Sendable {
         id: String,
         name: String,
         transport: AITerminalTransport,
+        startupCommands: [String] = [],
         sshAlias: String?,
         hostname: String?,
         user: String?,
@@ -98,6 +101,7 @@ struct AITerminalHost: Identifiable, Codable, Hashable, Sendable {
         self.id = id
         self.name = name
         self.transport = transport
+        self.startupCommands = startupCommands
         self.sshAlias = sshAlias
         self.hostname = hostname
         self.user = user
@@ -111,6 +115,7 @@ struct AITerminalHost: Identifiable, Codable, Hashable, Sendable {
         case id
         case name
         case transport
+        case startupCommands
         case sshAlias
         case hostname
         case user
@@ -125,6 +130,7 @@ struct AITerminalHost: Identifiable, Codable, Hashable, Sendable {
         id = try container.decode(String.self, forKey: .id)
         name = try container.decode(String.self, forKey: .name)
         transport = try container.decode(AITerminalTransport.self, forKey: .transport)
+        startupCommands = try container.decodeIfPresent([String].self, forKey: .startupCommands) ?? []
         sshAlias = try container.decodeIfPresent(String.self, forKey: .sshAlias)
         hostname = try container.decodeIfPresent(String.self, forKey: .hostname)
         user = try container.decodeIfPresent(String.self, forKey: .user)
@@ -139,6 +145,7 @@ struct AITerminalHost: Identifiable, Codable, Hashable, Sendable {
         try container.encode(id, forKey: .id)
         try container.encode(name, forKey: .name)
         try container.encode(transport, forKey: .transport)
+        try container.encode(startupCommands, forKey: .startupCommands)
         try container.encodeIfPresent(sshAlias, forKey: .sshAlias)
         try container.encodeIfPresent(hostname, forKey: .hostname)
         try container.encodeIfPresent(user, forKey: .user)
@@ -152,6 +159,7 @@ struct AITerminalHost: Identifiable, Codable, Hashable, Sendable {
         id: "local",
         name: L10n.AITerminalManager.thisMac,
         transport: .local,
+        startupCommands: [],
         sshAlias: nil,
         hostname: nil,
         user: nil,
@@ -167,6 +175,11 @@ struct AITerminalHost: Identifiable, Codable, Hashable, Sendable {
         switch transport {
         case .local:
             return defaultDirectory ?? L10n.AITerminalManager.localShell
+        case .localmcd:
+            if startupCommands.isEmpty {
+                return defaultDirectory ?? L10n.AITerminalManager.localShell
+            }
+            return startupCommands.joined(separator: "  •  ")
         case .ssh:
             var parts: [String] = []
             if let sshAlias, !sshAlias.isEmpty {
@@ -445,9 +458,50 @@ struct AITerminalLaunchPlan {
                 )
             )
 
+        case .localmcd:
+            return localCommand(
+                host: host,
+                directoryOverride: workspace.directory,
+                workspaceID: workspace.id,
+                sourceLabel: workspace.name
+            )
+
         case .ssh:
             return remote(host: host, directoryOverride: workspace.directory, workspaceID: workspace.id, sourceLabel: workspace.name)
         }
+    }
+
+    static func localCommand(
+        host: AITerminalHost,
+        directoryOverride: String? = nil,
+        workspaceID: String? = nil,
+        sourceLabel: String? = nil
+    ) -> AITerminalLaunchPlan? {
+        guard host.transport == .localmcd else { return nil }
+        let startupCommands = host.startupCommands
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        guard !startupCommands.isEmpty else { return nil }
+
+        var config = Ghostty.SurfaceConfiguration()
+        config.workingDirectory = directoryOverride ?? host.defaultDirectory
+        config.initialInput = startupCommands.joined(separator: "\n") + "\n"
+        config.environmentVariables["GHOSTTY_AI_MANAGER"] = "1"
+        config.environmentVariables["GHOSTTY_AI_SESSION_KIND"] = "local_mcd"
+        config.environmentVariables["GHOSTTY_AI_HOST_ID"] = host.id
+        if let workspaceID = workspaceID {
+            config.environmentVariables["GHOSTTY_AI_WORKSPACE_ID"] = workspaceID
+        }
+
+        return .init(
+            surfaceConfiguration: config,
+            registration: .init(
+                hostID: host.id,
+                workspaceID: workspaceID,
+                managedState: .manual,
+                sourceLabel: sourceLabel ?? host.name
+            )
+        )
     }
 
     static func remote(

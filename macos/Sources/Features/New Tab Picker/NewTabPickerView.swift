@@ -170,7 +170,7 @@ struct NewTabPickerView: View {
 
                 Spacer(minLength: 10)
 
-                Image(systemName: entry.host.isLocal ? "laptopcomputer" : "arrow.up.right.square")
+                Image(systemName: hostIconName(for: entry.host))
                     .font(.body.weight(.semibold))
                     .foregroundStyle(Color.accentColor)
             }
@@ -309,6 +309,15 @@ struct NewTabPickerView: View {
             return L10n.AITerminalManager.savedHostSource
         case .imported:
             return L10n.AITerminalManager.importedHostSource
+        }
+    }
+
+    private func hostIconName(for host: AITerminalHost) -> String {
+        switch host.transport {
+        case .local, .localmcd:
+            return "laptopcomputer"
+        case .ssh:
+            return "arrow.up.right.square"
         }
     }
 

@@ -222,28 +222,40 @@ final class AITerminalManagerStore: ObservableObject {
         directoryOverride: String?,
         launchTarget: AITerminalLaunchTarget
     ) {
-        if host.isLocal {
+        switch host.transport {
+        case .local:
             openLocalShell(launchTarget: launchTarget)
             return
-        }
 
-        let passwordResolution = resolvedPasswordAutomation(for: host)
-        if let message = passwordResolution.error {
-            lastError = message
-            recordRecentHost(host.id, status: .failed, errorSummary: message)
+        case .localmcd:
+            guard let plan = AITerminalLaunchPlan.localCommand(host: host, directoryOverride: directoryOverride) else {
+                lastError = L10n.AITerminalManager.localMCDCommandsEmpty
+                recordRecentHost(host.id, status: .failed, errorSummary: lastError)
+                return
+            }
+            _ = launch(plan, target: launchTarget)
+            recordRecentHost(host.id, status: .connected)
             return
-        }
-        let savedPassword = passwordResolution.password
 
-        guard let plan = AITerminalLaunchPlan.remote(host: host, directoryOverride: directoryOverride) else {
-            lastError = L10n.AITerminalManager.hostMissingSSHDetails
-            recordRecentHost(host.id, status: .failed, errorSummary: lastError)
-            return
-        }
+        case .ssh:
+            let passwordResolution = resolvedPasswordAutomation(for: host)
+            if let message = passwordResolution.error {
+                lastError = message
+                recordRecentHost(host.id, status: .failed, errorSummary: message)
+                return
+            }
+            let savedPassword = passwordResolution.password
 
-        guard let sessionID = launch(plan, target: launchTarget) else { return }
-        registerRemoteSession(sessionID, host: host, savedPassword: savedPassword)
-        recordRecentHost(host.id, status: .connected)
+            guard let plan = AITerminalLaunchPlan.remote(host: host, directoryOverride: directoryOverride) else {
+                lastError = L10n.AITerminalManager.hostMissingSSHDetails
+                recordRecentHost(host.id, status: .failed, errorSummary: lastError)
+                return
+            }
+
+            guard let sessionID = launch(plan, target: launchTarget) else { return }
+            registerRemoteSession(sessionID, host: host, savedPassword: savedPassword)
+            recordRecentHost(host.id, status: .connected)
+        }
     }
 
     func open(workspace: AITerminalWorkspaceTemplate) {
@@ -265,7 +277,7 @@ final class AITerminalManagerStore: ObservableObject {
         let savedPassword = passwordResolution.password
 
         guard let sessionID = launch(plan) else { return }
-        if !host.isLocal {
+        if host.transport == .ssh {
             registerRemoteSession(sessionID, host: host, savedPassword: savedPassword)
         }
         if !host.isLocal {
@@ -390,6 +402,52 @@ final class AITerminalManagerStore: ObservableObject {
             configuration.savedHosts.sort {
                 $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
             }
+        }
+        lastError = nil
+        persistConfiguration()
+        rebuildSessions()
+    }
+
+    func saveLocalMCDHost(
+        existingHostID: String? = nil,
+        name: String,
+        defaultDirectory: String,
+        startupCommands: String
+    ) {
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedDirectory = defaultDirectory.trimmingCharacters(in: .whitespacesAndNewlines)
+        let parsedCommands = startupCommands
+            .split(whereSeparator: \.isNewline)
+            .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+
+        guard !parsedCommands.isEmpty else {
+            lastError = L10n.AITerminalManager.localMCDCommandsEmpty
+            return
+        }
+
+        let resolvedName = trimmedName.isEmpty
+            ? (parsedCommands.first ?? L10n.AITerminalManager.localShell)
+            : trimmedName
+        let hostID = existingHostID ?? "localmcd:\(UUID().uuidString)"
+        let host = AITerminalHost(
+            id: hostID,
+            name: resolvedName,
+            transport: .localmcd,
+            startupCommands: parsedCommands,
+            sshAlias: nil,
+            hostname: nil,
+            user: nil,
+            port: nil,
+            defaultDirectory: trimmedDirectory.isEmpty ? nil : trimmedDirectory,
+            source: .configurationFile,
+            authMode: .system
+        )
+
+        configuration.savedHosts.removeAll { $0.id == host.id }
+        configuration.savedHosts.append(host)
+        configuration.savedHosts.sort {
+            $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
         }
         lastError = nil
         persistConfiguration()
@@ -854,7 +912,8 @@ final class AITerminalManagerStore: ObservableObject {
             guard let registration = registrations[session.id],
                   let hostID = registration.hostID,
                   hostID != AITerminalHost.local.id,
-                  let host = hostLookup[hostID]
+                  let host = hostLookup[hostID],
+                  host.transport == .ssh
             else {
                 return nil
             }

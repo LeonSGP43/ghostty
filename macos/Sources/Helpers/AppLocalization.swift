@@ -144,6 +144,7 @@ enum AppLocalization {
         "ai.manager.error.host_name_empty": "Host name cannot be empty.",
         "ai.manager.error.host_missing_alias_or_hostname": "Provide either an SSH alias or a hostname.",
         "ai.manager.error.host_invalid_port": "SSH port must be a number.",
+        "ai.manager.error.local_mcd_commands_empty": "Provide at least one startup command.",
         "ai.manager.error.workspace_name_empty": "Workspace name cannot be empty.",
         "ai.manager.error.workspace_directory_empty": "Workspace directory cannot be empty.",
         "ai.manager.error.session_unavailable": "The selected terminal session is no longer available.",
@@ -190,6 +191,13 @@ enum AppLocalization {
         "ssh.connections.title": "Connections",
         "ssh.connections.subtitle": "Save SSH connections, reuse passwords from Keychain, and jump back into active remote sessions.",
         "ssh.connections.new": "New Connection",
+        "ssh.connections.search": "Search Connections",
+        "ssh.connections.connection_type": "Connection Type",
+        "ssh.connections.connection_type.ssh": "SSH",
+        "ssh.connections.connection_type.localmcd": "Local MCD",
+        "ssh.connections.localmcd.commands": "Startup Commands",
+        "ssh.connections.localmcd.commands.help": "Commands run line by line in a new tab.",
+        "ssh.connections.localmcd.edit": "Edit Local MCD Connection",
         "ssh.connections.save": "Save Connection",
         "ssh.connections.update": "Update Connection",
         "ssh.connections.authentication": "Authentication",
@@ -381,6 +389,7 @@ enum AppLocalization {
         "ai.manager.error.host_name_empty": "主机名称不能为空。",
         "ai.manager.error.host_missing_alias_or_hostname": "请至少提供 SSH 别名或主机名。",
         "ai.manager.error.host_invalid_port": "SSH 端口必须是数字。",
+        "ai.manager.error.local_mcd_commands_empty": "请至少填写一条启动命令。",
         "ai.manager.error.workspace_name_empty": "工作区名称不能为空。",
         "ai.manager.error.workspace_directory_empty": "工作区目录不能为空。",
         "ai.manager.error.session_unavailable": "选中的终端会话已不可用。",
@@ -427,6 +436,13 @@ enum AppLocalization {
         "ssh.connections.title": "连接中心",
         "ssh.connections.subtitle": "保存 SSH 连接、复用 Keychain 密码，并快速回到活动中的远程会话。",
         "ssh.connections.new": "新建连接",
+        "ssh.connections.search": "搜索连接",
+        "ssh.connections.connection_type": "连接类型",
+        "ssh.connections.connection_type.ssh": "SSH",
+        "ssh.connections.connection_type.localmcd": "Local MCD",
+        "ssh.connections.localmcd.commands": "启动命令",
+        "ssh.connections.localmcd.commands.help": "打开新标签页时将按行顺序执行这些命令。",
+        "ssh.connections.localmcd.edit": "编辑 Local MCD 连接",
         "ssh.connections.save": "保存连接",
         "ssh.connections.update": "更新连接",
         "ssh.connections.authentication": "认证方式",
@@ -1051,6 +1067,13 @@ enum L10n {
         nonisolated static var title: String { AppLocalization.localizedString("ssh.connections.title") }
         nonisolated static var subtitle: String { AppLocalization.localizedString("ssh.connections.subtitle") }
         nonisolated static var newConnection: String { AppLocalization.localizedString("ssh.connections.new") }
+        nonisolated static var searchConnections: String { AppLocalization.localizedString("ssh.connections.search") }
+        nonisolated static var connectionType: String { AppLocalization.localizedString("ssh.connections.connection_type") }
+        nonisolated static var connectionTypeSSH: String { AppLocalization.localizedString("ssh.connections.connection_type.ssh") }
+        nonisolated static var connectionTypeLocalMCD: String { AppLocalization.localizedString("ssh.connections.connection_type.localmcd") }
+        nonisolated static var localMCDStartupCommands: String { AppLocalization.localizedString("ssh.connections.localmcd.commands") }
+        nonisolated static var localMCDStartupCommandsHelp: String { AppLocalization.localizedString("ssh.connections.localmcd.commands.help") }
+        nonisolated static var editLocalMCDConnection: String { AppLocalization.localizedString("ssh.connections.localmcd.edit") }
         nonisolated static var saveConnection: String { AppLocalization.localizedString("ssh.connections.save") }
         nonisolated static var updateConnection: String { AppLocalization.localizedString("ssh.connections.update") }
         nonisolated static var authentication: String { AppLocalization.localizedString("ssh.connections.authentication") }
@@ -1196,6 +1219,7 @@ enum L10n {
         nonisolated static var hostNameEmpty: String { AppLocalization.localizedString("ai.manager.error.host_name_empty") }
         nonisolated static var hostMissingAliasOrHostname: String { AppLocalization.localizedString("ai.manager.error.host_missing_alias_or_hostname") }
         nonisolated static var hostInvalidPort: String { AppLocalization.localizedString("ai.manager.error.host_invalid_port") }
+        nonisolated static var localMCDCommandsEmpty: String { AppLocalization.localizedString("ai.manager.error.local_mcd_commands_empty") }
         nonisolated static var workspaceNameEmpty: String { AppLocalization.localizedString("ai.manager.error.workspace_name_empty") }
         nonisolated static var workspaceDirectoryEmpty: String { AppLocalization.localizedString("ai.manager.error.workspace_directory_empty") }
         nonisolated static var sessionUnavailable: String { AppLocalization.localizedString("ai.manager.error.session_unavailable") }

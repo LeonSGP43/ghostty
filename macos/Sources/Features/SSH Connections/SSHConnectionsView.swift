@@ -3,6 +3,40 @@ import Foundation
 import SwiftUI
 
 struct SSHConnectionsView: View {
+    private enum ConnectionEditorType: String, CaseIterable, Identifiable {
+        case ssh
+        case localmcd
+
+        var id: String { rawValue }
+
+        init(_ transport: AITerminalTransport) {
+            switch transport {
+            case .localmcd:
+                self = .localmcd
+            case .local, .ssh:
+                self = .ssh
+            }
+        }
+
+        var transport: AITerminalTransport {
+            switch self {
+            case .ssh:
+                return .ssh
+            case .localmcd:
+                return .localmcd
+            }
+        }
+
+        var displayName: String {
+            switch self {
+            case .ssh:
+                return L10n.SSHConnections.connectionTypeSSH
+            case .localmcd:
+                return L10n.SSHConnections.connectionTypeLocalMCD
+            }
+        }
+    }
+
     private struct VisualEffectBackground: NSViewRepresentable {
         let material: NSVisualEffectView.Material
 
@@ -22,12 +56,14 @@ struct SSHConnectionsView: View {
     @Environment(\.colorScheme) private var colorScheme
     @EnvironmentObject private var store: AITerminalManagerStore
 
+    @State private var hostEditorType: ConnectionEditorType = .ssh
     @State private var hostName = ""
     @State private var hostAlias = ""
     @State private var hostHostname = ""
     @State private var hostUser = ""
     @State private var hostPort = ""
     @State private var hostDefaultDirectory = ""
+    @State private var hostStartupCommands = ""
     @State private var hostPassword = ""
     @State private var hostAuthMode: AITerminalHostAuthMode = .system
     @State private var editingHostID: String?
@@ -65,7 +101,7 @@ struct SSHConnectionsView: View {
             hostEditorSheet
         }
         .onAppear(perform: syncSelection)
-        .onChange(of: allSSHHosts.map(\.id)) { _ in
+        .onChange(of: allConnectionHosts.map(\.id)) { _ in
             syncSelection()
         }
     }
@@ -115,7 +151,7 @@ struct SSHConnectionsView: View {
                 }
             }
 
-            TextField(L10n.AITerminalManager.searchHosts, text: $hostSearchText)
+            TextField(L10n.SSHConnections.searchConnections, text: $hostSearchText)
                 .textFieldStyle(.roundedBorder)
 
             ScrollView {
@@ -290,7 +326,7 @@ struct SSHConnectionsView: View {
                     HStack(spacing: 6) {
                         compactBadge(hostSourceLabel(for: host))
 
-                        if host.authMode == .password {
+                        if host.transport == .ssh, host.authMode == .password {
                             compactBadge(host.authMode.displayName)
                         }
                     }
@@ -318,7 +354,9 @@ struct SSHConnectionsView: View {
                 VStack(alignment: .leading, spacing: 18) {
                     heroSection(for: selectedHost)
                     summaryGrid(for: selectedHost)
-                    sessionsSection(for: selectedHost)
+                    if selectedHost.transport == .ssh {
+                        sessionsSection(for: selectedHost)
+                    }
                 }
                 .padding(22)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -329,7 +367,7 @@ struct SSHConnectionsView: View {
                 Text(L10n.SSHConnections.title)
                     .font(.title2.weight(.semibold))
 
-                Text(allSSHHosts.isEmpty ? L10n.AITerminalManager.hostsEmpty : L10n.AITerminalManager.noHostSelected)
+                Text(allConnectionHosts.isEmpty ? L10n.AITerminalManager.hostsEmpty : L10n.AITerminalManager.noHostSelected)
                     .foregroundStyle(.secondary)
 
                 HStack(spacing: 10) {
@@ -362,7 +400,10 @@ struct SSHConnectionsView: View {
 
                     HStack(spacing: 8) {
                         compactBadge(hostSourceLabel(for: host))
-                        compactBadge(host.authMode.displayName)
+
+                        if host.transport == .ssh {
+                            compactBadge(host.authMode.displayName)
+                        }
 
                         if hasActiveSession(for: host) {
                             compactBadge(L10n.SSHConnections.activeSessions)
@@ -404,7 +445,7 @@ struct SSHConnectionsView: View {
                 }
             }
 
-            if host.authMode == .password {
+            if host.transport == .ssh, host.authMode == .password {
                 Text(store.hasStoredPassword(for: host) ? L10n.SSHConnections.passwordStored : L10n.SSHConnections.passwordNotStored)
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -430,22 +471,47 @@ struct SSHConnectionsView: View {
         VStack(alignment: .leading, spacing: 14) {
             sectionHeader(L10n.AITerminalManager.hostDetails)
 
-            LazyVGrid(
-                columns: [
-                    GridItem(.flexible(minimum: 220), spacing: 14),
-                    GridItem(.flexible(minimum: 220), spacing: 14),
-                ],
-                alignment: .leading,
-                spacing: 14
-            ) {
-                detailCell(label: L10n.AITerminalManager.displayName, value: host.name)
-                detailCell(label: L10n.AITerminalManager.hostTarget, value: host.connectionTarget ?? "—")
-                detailCell(label: L10n.AITerminalManager.hostname, value: host.hostname ?? "—")
-                detailCell(label: L10n.AITerminalManager.user, value: host.user ?? "—")
-                detailCell(label: L10n.AITerminalManager.port, value: host.port.map(String.init) ?? "—")
-                detailCell(label: L10n.AITerminalManager.defaultDirectory, value: host.defaultDirectory ?? "—")
-                detailCell(label: L10n.SSHConnections.authentication, value: host.authMode.displayName)
-                detailCell(label: L10n.AITerminalManager.hostSource, value: hostSourceLabel(for: host))
+            switch host.transport {
+            case .ssh:
+                LazyVGrid(
+                    columns: [
+                        GridItem(.flexible(minimum: 220), spacing: 14),
+                        GridItem(.flexible(minimum: 220), spacing: 14),
+                    ],
+                    alignment: .leading,
+                    spacing: 14
+                ) {
+                    detailCell(label: L10n.AITerminalManager.displayName, value: host.name)
+                    detailCell(label: L10n.AITerminalManager.hostTarget, value: host.connectionTarget ?? "—")
+                    detailCell(label: L10n.AITerminalManager.hostname, value: host.hostname ?? "—")
+                    detailCell(label: L10n.AITerminalManager.user, value: host.user ?? "—")
+                    detailCell(label: L10n.AITerminalManager.port, value: host.port.map(String.init) ?? "—")
+                    detailCell(label: L10n.AITerminalManager.defaultDirectory, value: host.defaultDirectory ?? "—")
+                    detailCell(label: L10n.SSHConnections.authentication, value: host.authMode.displayName)
+                    detailCell(label: L10n.AITerminalManager.hostSource, value: hostSourceLabel(for: host))
+                }
+
+            case .localmcd:
+                LazyVGrid(
+                    columns: [
+                        GridItem(.flexible(minimum: 220), spacing: 14),
+                        GridItem(.flexible(minimum: 220), spacing: 14),
+                    ],
+                    alignment: .leading,
+                    spacing: 14
+                ) {
+                    detailCell(label: L10n.AITerminalManager.displayName, value: host.name)
+                    detailCell(label: L10n.SSHConnections.connectionType, value: L10n.SSHConnections.connectionTypeLocalMCD)
+                    detailCell(label: L10n.AITerminalManager.defaultDirectory, value: host.defaultDirectory ?? "—")
+                    detailCell(label: L10n.AITerminalManager.hostSource, value: hostSourceLabel(for: host))
+                    detailCell(
+                        label: L10n.SSHConnections.localMCDStartupCommands,
+                        value: host.startupCommands.isEmpty ? "—" : host.startupCommands.joined(separator: "\n")
+                    )
+                }
+
+            case .local:
+                EmptyView()
             }
         }
     }
@@ -514,32 +580,60 @@ struct SSHConnectionsView: View {
         NavigationStack {
             Form {
                 Section {
-                    TextField(L10n.AITerminalManager.displayName, text: $hostName)
-                    TextField(L10n.AITerminalManager.sshAlias, text: $hostAlias)
-                    TextField(L10n.AITerminalManager.hostname, text: $hostHostname)
-                    TextField(L10n.AITerminalManager.user, text: $hostUser)
-                    TextField(L10n.AITerminalManager.port, text: $hostPort)
-                    TextField(L10n.AITerminalManager.defaultDirectory, text: $hostDefaultDirectory)
+                    Picker(L10n.SSHConnections.connectionType, selection: $hostEditorType) {
+                        ForEach(ConnectionEditorType.allCases) { connectionType in
+                            Text(connectionType.displayName).tag(connectionType)
+                        }
+                    }
+                    .disabled(editingHostID != nil)
                 }
 
-                Section(L10n.SSHConnections.authentication) {
-                    Picker(L10n.SSHConnections.authentication, selection: $hostAuthMode) {
-                        ForEach(AITerminalHostAuthMode.allCases) { authMode in
-                            Text(authMode.displayName).tag(authMode)
+                switch hostEditorType {
+                case .ssh:
+                    Section {
+                        TextField(L10n.AITerminalManager.displayName, text: $hostName)
+                        TextField(L10n.AITerminalManager.sshAlias, text: $hostAlias)
+                        TextField(L10n.AITerminalManager.hostname, text: $hostHostname)
+                        TextField(L10n.AITerminalManager.user, text: $hostUser)
+                        TextField(L10n.AITerminalManager.port, text: $hostPort)
+                        TextField(L10n.AITerminalManager.defaultDirectory, text: $hostDefaultDirectory)
+                    }
+
+                    Section(L10n.SSHConnections.authentication) {
+                        Picker(L10n.SSHConnections.authentication, selection: $hostAuthMode) {
+                            ForEach(AITerminalHostAuthMode.allCases) { authMode in
+                                Text(authMode.displayName).tag(authMode)
+                            }
+                        }
+
+                        if hostAuthMode == .password {
+                            SecureField(L10n.SSHConnections.password, text: $hostPassword)
+
+                            Text(passwordHelperText)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
                         }
                     }
 
-                    if hostAuthMode == .password {
-                        SecureField(L10n.SSHConnections.password, text: $hostPassword)
+                case .localmcd:
+                    Section {
+                        TextField(L10n.AITerminalManager.displayName, text: $hostName)
+                        TextField(L10n.AITerminalManager.defaultDirectory, text: $hostDefaultDirectory)
+                    }
 
-                        Text(passwordHelperText)
+                    Section(L10n.SSHConnections.localMCDStartupCommands) {
+                        TextEditor(text: $hostStartupCommands)
+                            .font(.system(.body, design: .monospaced))
+                            .frame(minHeight: 160)
+
+                        Text(L10n.SSHConnections.localMCDStartupCommandsHelp)
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                 }
             }
             .formStyle(.grouped)
-            .navigationTitle(editingHostID == nil ? L10n.SSHConnections.newConnection : L10n.AITerminalManager.editSSHHost)
+            .navigationTitle(hostEditorTitle)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(L10n.AITerminalManager.cancelEdit) {
@@ -637,12 +731,14 @@ struct SSHConnectionsView: View {
     private func beginEditing(_ host: AITerminalHost) {
         selectedHostID = host.id
         editingHostID = host.id
+        hostEditorType = .init(host.transport)
         hostName = host.name
         hostAlias = host.sshAlias ?? ""
         hostHostname = host.hostname ?? ""
         hostUser = host.user ?? ""
         hostPort = host.port.map(String.init) ?? ""
         hostDefaultDirectory = host.defaultDirectory ?? ""
+        hostStartupCommands = host.startupCommands.joined(separator: "\n")
         hostAuthMode = host.authMode
         hostPassword = ""
         isPresentingEditor = true
@@ -651,21 +747,33 @@ struct SSHConnectionsView: View {
     private func beginDuplicating(_ host: AITerminalHost) {
         selectedHostID = host.id
         editingHostID = nil
+        hostEditorType = .init(host.transport)
         hostName = "\(host.name) \(L10n.AITerminalManager.copySuffix)"
-        hostAlias = AITerminalManagerStore.duplicateAlias(
-            for: host,
-            existingHosts: allSSHHosts
-        )
-        hostHostname = host.hostname ?? ""
-        hostUser = host.user ?? ""
-        hostPort = host.port.map(String.init) ?? ""
         hostDefaultDirectory = host.defaultDirectory ?? ""
+        hostStartupCommands = host.startupCommands.joined(separator: "\n")
         hostAuthMode = host.authMode
+
+        if host.transport == .ssh {
+            hostAlias = AITerminalManagerStore.duplicateAlias(
+                for: host,
+                existingHosts: allConnectionHosts
+            )
+            hostHostname = host.hostname ?? ""
+            hostUser = host.user ?? ""
+            hostPort = host.port.map(String.init) ?? ""
+        } else {
+            hostAlias = ""
+            hostHostname = ""
+            hostUser = ""
+            hostPort = ""
+        }
+
         hostPassword = ""
         isPresentingEditor = true
     }
 
     private func prepareNewConnection() {
+        hostEditorType = .ssh
         editingHostID = nil
         hostName = ""
         hostAlias = ""
@@ -673,6 +781,7 @@ struct SSHConnectionsView: View {
         hostUser = ""
         hostPort = ""
         hostDefaultDirectory = ""
+        hostStartupCommands = ""
         hostAuthMode = .system
         hostPassword = ""
         isPresentingEditor = true
@@ -681,28 +790,42 @@ struct SSHConnectionsView: View {
     private func cancelEditor() {
         isPresentingEditor = false
         hostPassword = ""
+        hostStartupCommands = ""
         editingHostID = nil
     }
 
     private func persistEditor() {
-        let draftHostID = AITerminalHost.stableID(
-            existingID: editingHostID,
-            sshAlias: hostAlias,
-            hostname: hostHostname,
-            user: hostUser
-        )
+        let draftHostID: String
+        switch hostEditorType {
+        case .ssh:
+            draftHostID = AITerminalHost.stableID(
+                existingID: editingHostID,
+                sshAlias: hostAlias,
+                hostname: hostHostname,
+                user: hostUser
+            )
 
-        store.saveHost(
-            existingHostID: editingHostID,
-            name: hostName,
-            sshAlias: hostAlias,
-            hostname: hostHostname,
-            user: hostUser,
-            port: hostPort,
-            defaultDirectory: hostDefaultDirectory,
-            authMode: hostAuthMode,
-            password: hostPassword
-        )
+            store.saveHost(
+                existingHostID: editingHostID,
+                name: hostName,
+                sshAlias: hostAlias,
+                hostname: hostHostname,
+                user: hostUser,
+                port: hostPort,
+                defaultDirectory: hostDefaultDirectory,
+                authMode: hostAuthMode,
+                password: hostPassword
+            )
+
+        case .localmcd:
+            draftHostID = editingHostID ?? "localmcd:\(UUID().uuidString)"
+            store.saveLocalMCDHost(
+                existingHostID: draftHostID,
+                name: hostName,
+                defaultDirectory: hostDefaultDirectory,
+                startupCommands: hostStartupCommands
+            )
+        }
 
         guard store.lastError == nil else { return }
         selectedHostID = draftHostID
@@ -715,13 +838,13 @@ struct SSHConnectionsView: View {
     }
 
     private func syncSelection() {
-        let ids = Set(allSSHHosts.map(\.id))
+        let ids = Set(allConnectionHosts.map(\.id))
 
         if let selectedHostID, ids.contains(selectedHostID) {
             return
         }
 
-        selectedHostID = allSSHHosts.first?.id
+        selectedHostID = allConnectionHosts.first?.id
     }
 
     private var displayRecentHosts: [AITerminalHost] {
@@ -754,12 +877,25 @@ struct SSHConnectionsView: View {
         )
     }
 
-    private var allSSHHosts: [AITerminalHost] {
+    private var allConnectionHosts: [AITerminalHost] {
         store.availableHosts.filter { !$0.isLocal }
     }
 
+    private var hostEditorTitle: String {
+        if editingHostID == nil {
+            return L10n.SSHConnections.newConnection
+        }
+
+        switch hostEditorType {
+        case .ssh:
+            return L10n.AITerminalManager.editSSHHost
+        case .localmcd:
+            return L10n.SSHConnections.editLocalMCDConnection
+        }
+    }
+
     private var passwordHelperText: String {
-        if hostAuthMode != .password {
+        if hostEditorType != .ssh || hostAuthMode != .password {
             return ""
         }
 
@@ -773,7 +909,7 @@ struct SSHConnectionsView: View {
 
     private var editingHost: AITerminalHost? {
         guard let editingHostID else { return nil }
-        return allSSHHosts.first(where: { $0.id == editingHostID })
+        return allConnectionHosts.first(where: { $0.id == editingHostID })
     }
 
     private func filterHosts(_ hosts: [AITerminalHost]) -> [AITerminalHost] {
@@ -785,6 +921,7 @@ struct SSHConnectionsView: View {
                 || (host.sshAlias?.localizedCaseInsensitiveContains(query) ?? false)
                 || (host.hostname?.localizedCaseInsensitiveContains(query) ?? false)
                 || (host.user?.localizedCaseInsensitiveContains(query) ?? false)
+                || host.startupCommands.contains(where: { $0.localizedCaseInsensitiveContains(query) })
         }
     }
 
@@ -840,7 +977,7 @@ struct SSHConnectionsView: View {
 
     private var selectedHost: AITerminalHost? {
         guard let selectedHostID else { return nil }
-        return allSSHHosts.first(where: { $0.id == selectedHostID })
+        return allConnectionHosts.first(where: { $0.id == selectedHostID })
     }
 }
 
