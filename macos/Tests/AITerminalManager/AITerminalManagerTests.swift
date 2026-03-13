@@ -80,7 +80,24 @@ struct AITerminalManagerTests {
         )
 
         let command = AITerminalLaunchPlan.remoteCommand(host: host)
-        #expect(command == "ssh buildbox -t 'cd /srv/app && exec ${SHELL:-/bin/sh} -l'\n")
+        #expect(command == "ssh buildbox -t 'export TERM=xterm-256color && export COLORTERM=truecolor && unset LC_ALL && cd /srv/app && exec ${SHELL:-/bin/sh} -l'")
+    }
+
+    @Test func buildsRemoteCommandWithoutDirectorySetsColorTerm() {
+        let host = AITerminalHost(
+            id: "ssh:buildbox",
+            name: "buildbox",
+            transport: .ssh,
+            sshAlias: "buildbox",
+            hostname: "10.0.0.5",
+            user: "deploy",
+            port: 2222,
+            defaultDirectory: nil,
+            source: .sshConfig
+        )
+
+        let command = AITerminalLaunchPlan.remoteCommand(host: host)
+        #expect(command == "ssh buildbox -t 'export TERM=xterm-256color && export COLORTERM=truecolor && unset LC_ALL && exec ${SHELL:-/bin/sh} -l'")
     }
 
     @Test func mergesImportedHostOverrides() {

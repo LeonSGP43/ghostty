@@ -456,12 +456,12 @@ struct AITerminalLaunchPlan {
         workspaceID: String? = nil,
         sourceLabel: String? = nil
     ) -> AITerminalLaunchPlan? {
-        guard let initialInput = remoteCommand(host: host, directoryOverride: directoryOverride) else {
+        guard let command = remoteCommand(host: host, directoryOverride: directoryOverride) else {
             return nil
         }
 
         var config = Ghostty.SurfaceConfiguration()
-        config.initialInput = initialInput
+        config.command = command
         config.environmentVariables["GHOSTTY_AI_MANAGER"] = "1"
         config.environmentVariables["GHOSTTY_AI_SESSION_KIND"] = "remote_ssh"
         config.environmentVariables["GHOSTTY_AI_HOST_ID"] = host.id
@@ -493,12 +493,15 @@ struct AITerminalLaunchPlan {
         command += " \(Ghostty.Shell.quote(target))"
 
         let directory = directoryOverride ?? host.defaultDirectory
+        let remoteShell: String
         if let directory, !directory.isEmpty {
-            let remoteShell = "cd \(Ghostty.Shell.quote(directory)) && exec ${SHELL:-/bin/sh} -l"
-            command += " -t \(Ghostty.Shell.quote(remoteShell))"
+            remoteShell = "export TERM=xterm-256color && export COLORTERM=truecolor && unset LC_ALL && cd \(Ghostty.Shell.quote(directory)) && exec ${SHELL:-/bin/sh} -l"
+        } else {
+            remoteShell = "export TERM=xterm-256color && export COLORTERM=truecolor && unset LC_ALL && exec ${SHELL:-/bin/sh} -l"
         }
+        command += " -t \(Ghostty.Shell.quote(remoteShell))"
 
-        return "\(command)\n"
+        return command
     }
 }
 

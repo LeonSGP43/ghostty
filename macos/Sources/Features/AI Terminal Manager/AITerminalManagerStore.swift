@@ -29,6 +29,7 @@ final class AITerminalManagerStore: ObservableObject {
     private var sshSessionAuthStates: [UUID: AITerminalSSHSessionAuthState] = [:]
     private var pendingSSHPasswordAutomations: [UUID: PendingSSHPasswordAutomation] = [:]
     private var taskBindings: [UUID: UUID] = [:]
+    private var sshPasswordAutomationTimer: Timer?
 
     init(
         appDelegateProvider: @escaping () -> AppDelegate?,
@@ -42,6 +43,11 @@ final class AITerminalManagerStore: ObservableObject {
         self.credentialStore = credentialStore
         self.configuration = (try? Self.loadConfiguration(from: self.configurationURL)) ?? .empty
         refresh()
+    }
+
+    deinit {
+        sshPasswordAutomationTimer?.invalidate()
+        sshPasswordAutomationTimer = nil
     }
 
     var availableHosts: [AITerminalHost] {
@@ -822,6 +828,10 @@ final class AITerminalManagerStore: ObservableObject {
                 tasks[index].note = L10n.AITerminalManager.sessionClosed
             }
         }
+
+        if pendingSSHPasswordAutomations.isEmpty {
+            stopSSHPasswordAutomationTimer()
+        }
     }
 
     private func registerRemoteSession(_ sessionID: UUID, host: AITerminalHost, savedPassword: String?) {
@@ -832,6 +842,7 @@ final class AITerminalManagerStore: ObservableObject {
                 hasSentPassword: false
             )
             sshSessionAuthStates[sessionID] = .awaitingPassword
+            ensureSSHPasswordAutomationTimer()
         } else {
             sshSessionAuthStates[sessionID] = .connecting
         }
@@ -891,9 +902,11 @@ final class AITerminalManagerStore: ObservableObject {
     }
 
     private func processPendingSSHPasswordPrompts() {
-        guard !pendingSSHPasswordAutomations.isEmpty,
-              let appDelegate = appDelegateProvider()
-        else {
+        guard !pendingSSHPasswordAutomations.isEmpty else {
+            stopSSHPasswordAutomationTimer()
+            return
+        }
+        guard let appDelegate = appDelegateProvider() else {
             return
         }
 
@@ -928,6 +941,37 @@ final class AITerminalManagerStore: ObservableObject {
                 sshSessionAuthStates[sessionID] = .awaitingPassword
             }
         }
+
+        if pendingSSHPasswordAutomations.isEmpty {
+            stopSSHPasswordAutomationTimer()
+        }
+    }
+
+    private func ensureSSHPasswordAutomationTimer() {
+        guard sshPasswordAutomationTimer == nil else { return }
+
+        let timer = Timer(
+            timeInterval: 0.2,
+            repeats: true
+        ) { [weak self] _ in
+            guard let self else { return }
+            guard !self.pendingSSHPasswordAutomations.isEmpty else {
+                self.stopSSHPasswordAutomationTimer()
+                return
+            }
+
+            self.processPendingSSHPasswordPrompts()
+            let hostLookup = Dictionary(uniqueKeysWithValues: self.availableHosts.map { ($0.id, $0) })
+            self.rebuildRemoteSessions(hostLookup: hostLookup)
+        }
+        timer.tolerance = 0.05
+        RunLoop.main.add(timer, forMode: .common)
+        sshPasswordAutomationTimer = timer
+    }
+
+    private func stopSSHPasswordAutomationTimer() {
+        sshPasswordAutomationTimer?.invalidate()
+        sshPasswordAutomationTimer = nil
     }
 
     private func updateTask(_ taskID: UUID, state: AITerminalTaskState, note: String?) {
