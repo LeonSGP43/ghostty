@@ -110,7 +110,7 @@
 	<array>
 		<dict>
 			<key>UTTypeIdentifier</key>
-			<string>com.mitchellh.ghosttySurfaceId</string>
+			<string>com.sgpleon.ghodexSurfaceId</string>
 			<key>UTTypeDescription</key>
 			<string>Ghostty Surface Identifier</string>
 			<key>UTTypeConformsTo</key>

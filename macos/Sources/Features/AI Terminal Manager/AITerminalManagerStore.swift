@@ -2654,7 +2654,7 @@ final class AITerminalManagerStore: ObservableObject {
             create: true
         )) ?? fileManager.homeDirectoryForCurrentUser
 
-        let bundleID = Bundle.main.bundleIdentifier ?? "com.mitchellh.ghostty"
+        let bundleID = Bundle.main.bundleIdentifier ?? "com.sgpleon.ghodex"
         let directory = appSupport.appendingPathComponent(bundleID, isDirectory: true)
         try? fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
         return directory.appendingPathComponent("ai-terminal-manager.json", isDirectory: false)
